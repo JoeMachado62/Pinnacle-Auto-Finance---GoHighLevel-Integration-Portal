@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dealer Registration - Pinnacle Auto Finance</title>
+    <style>
+        :root {
+            --primary-red: #9d0208;
+            --accent-red: #e50c0c;
+            --light-red: #fdf0f0;
+            --dark-text: #333;
+            --light-text: #666;
+            --border-color: #e0e0e0;
+            --error-color: #dc3545;
+            --success-color: #28a745;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: url('/images/pafghl bg.webp') center center/cover no-repeat, linear-gradient(135deg, var(--light-red) 0%, #ffffff 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: -1;
+        }
+
+        .register-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(157, 2, 8, 0.1);
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            border-top: 4px solid var(--primary-red);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: var(--primary-red);
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .logo p {
+            color: var(--light-text);
+            font-size: 14px;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+        }
+
+        .form-section h3 {
+            color: var(--primary-red);
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--light-red);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            flex: 1;
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--dark-text);
+            font-weight: 500;
+        }
+
+        .form-group label .required {
+            color: var(--error-color);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-red);
+        }
+
+        .form-group input.error {
+            border-color: var(--error-color);
+        }
+
+        .register-btn {
+            width: 100%;
+            background: var(--primary-red);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .register-btn:hover {
+            background: var(--accent-red);
+        }
+
+        .register-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .login-link {
+            text-align: center;
+            color: var(--light-text);
+            font-size: 14px;
+        }
+
+        .login-link a {
+            color: var(--primary-red);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: var(--light-text);
+            font-size: 14px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-red);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: var(--light-text);
+            margin-top: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            
+            .register-container {
+                padding: 20px;
+                margin: 0 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="logo">
+            <img src="/images/PAF logo White.png" alt="Pinnacle Auto Finance" style="max-width: 200px; margin-bottom: 10px; filter: invert(1);">
+            <h1>Pinnacle Auto Finance</h1>
+            <p>Dealer Registration</p>
+        </div>
+
+        <div id="alertContainer"></div>
+        
+        <form id="registerForm">
+            <div class="form-section">
+                <h3>Account Information</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealer_username">Username <span class="required">*</span></label>
+                        <input type="text" id="dealer_username" name="dealer_username" required>
+                        <div class="help-text">Choose a unique username for login</div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealer_password">Password <span class="required">*</span></label>
+                        <input type="password" id="dealer_password" name="dealer_password" required minlength="8">
+                        <div class="help-text">Minimum 8 characters</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="dealer_confirm_password">Confirm Password <span class="required">*</span></label>
+                        <input type="password" id="dealer_confirm_password" name="dealer_confirm_password" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Dealer Information</h3>
+                <div class="form-group">
+                    <label for="dealer_name">Dealer Name <span class="required">*</span></label>
+                    <input type="text" id="dealer_name" name="dealer_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="dealer_legal_name">Legal Name (if different)</label>
+                    <input type="text" id="dealer_legal_name" name="dealer_legal_name">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealer_license_number">Dealer License Number</label>
+                        <input type="text" id="dealer_license_number" name="dealer_license_number">
+                        <div class="help-text">Either License Number or Federal Tax ID is required</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="dealer_federal_tax_id">Federal Tax ID</label>
+                        <input type="text" id="dealer_federal_tax_id" name="dealer_federal_tax_id">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="website">Website</label>
+                    <input type="url" id="website" name="website" placeholder="https://www.example.com">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Dealer Address</h3>
+                <div class="form-group">
+                    <label for="dealer_address">Street Address <span class="required">*</span></label>
+                    <input type="text" id="dealer_address" name="dealer_address" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealer_city">City <span class="required">*</span></label>
+                        <input type="text" id="dealer_city" name="dealer_city" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dealer_state">State <span class="required">*</span></label>
+                        <input type="text" id="dealer_state" name="dealer_state" required maxlength="2" placeholder="FL">
+                    </div>
+                    <div class="form-group">
+                        <label for="postalCode">ZIP Code <span class="required">*</span></label>
+                        <input type="text" id="postalCode" name="postalCode" required maxlength="10">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Contact Information</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealer_first_name">First Name <span class="required">*</span></label>
+                        <input type="text" id="dealer_first_name" name="dealer_first_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dealer_last_name">Last Name <span class="required">*</span></label>
+                        <input type="text" id="dealer_last_name" name="dealer_last_name" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="dealer_owner_full_name">Owner Full Name</label>
+                    <input type="text" id="dealer_owner_full_name" name="dealer_owner_full_name">
+                    <div class="help-text">If different from contact person above</div>
+                </div>
+                <div class="form-group">
+                    <label for="dealer_contact">Main Contact Person</label>
+                    <input type="text" id="dealer_contact" name="dealer_contact">
+                    <div class="help-text">Primary contact for approvals and business</div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="email">Email Address <span class="required">*</span></label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone Number <span class="required">*</span></label>
+                        <input type="tel" id="phone" name="phone" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3>Additional Phone Numbers</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealer_telephone">Dealer Telephone</label>
+                        <input type="tel" id="dealer_telephone" name="dealer_telephone">
+                    </div>
+                    <div class="form-group">
+                        <label for="dealer_fax_number">Fax Number</label>
+                        <input type="tel" id="dealer_fax_number" name="dealer_fax_number">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="dealer_contact_cell_phone">Contact Cell Phone</label>
+                        <input type="tel" id="dealer_contact_cell_phone" name="dealer_contact_cell_phone">
+                    </div>
+                    <div class="form-group">
+                        <label for="dealer_contact_for_approval">Contact for Approval</label>
+                        <input type="tel" id="dealer_contact_for_approval" name="dealer_contact_for_approval">
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="register-btn" id="registerBtn">
+                Register Dealer Account
+            </button>
+        </form>
+
+        <div class="loading" id="loading">
+            <span class="spinner"></span>
+            Creating your account...
+        </div>
+
+        <div class="login-link">
+            Already have an account? <a href="/login.html">Sign in here</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin + '/api';
+
+        function showAlert(message, type = 'error') {
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type}">
+                    ${message}
+                </div>
+            `;
+            alertContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function clearAlert() {
+            document.getElementById('alertContainer').innerHTML = '';
+        }
+
+        function setLoading(isLoading) {
+            const registerBtn = document.getElementById('registerBtn');
+            const loading = document.getElementById('loading');
+            const form = document.getElementById('registerForm');
+
+            if (isLoading) {
+                registerBtn.disabled = true;
+                registerBtn.style.display = 'none';
+                loading.style.display = 'block';
+                form.style.opacity = '0.7';
+            } else {
+                registerBtn.disabled = false;
+                registerBtn.style.display = 'block';
+                loading.style.display = 'none';
+                form.style.opacity = '1';
+            }
+        }
+
+        function validateForm(formData) {
+            const errors = [];
+
+            // Check required fields
+            const requiredFields = [
+                'dealer_username', 'dealer_password', 'dealer_confirm_password', 
+                'dealer_name', 'dealer_first_name', 'dealer_last_name', 
+                'email', 'phone', 'dealer_address', 'dealer_city', 'dealer_state', 'postalCode'
+            ];
+            
+            requiredFields.forEach(field => {
+                if (!formData.get(field) || formData.get(field).trim() === '') {
+                    const fieldName = field.replace(/dealer_|_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    errors.push(`${fieldName} is required`);
+                }
+            });
+
+            // Check password match
+            if (formData.get('dealer_password') !== formData.get('dealer_confirm_password')) {
+                errors.push('Passwords do not match');
+            }
+
+            // Check password length
+            if (formData.get('dealer_password') && formData.get('dealer_password').length < 8) {
+                errors.push('Password must be at least 8 characters long');
+            }
+
+            // Check email format
+            const email = formData.get('email');
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                errors.push('Please enter a valid email address');
+            }
+
+            // Check that either dealer license or federal tax ID is provided
+            if (!formData.get('dealer_license_number') && !formData.get('dealer_federal_tax_id')) {
+                errors.push('Either Dealer License Number or Federal Tax ID is required');
+            }
+
+            return errors;
+        }
+
+        // Handle registration form submission
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            clearAlert();
+
+            const formData = new FormData(e.target);
+            
+            // Client-side validation
+            const validationErrors = validateForm(formData);
+            if (validationErrors.length > 0) {
+                showAlert(validationErrors.join('<br>'));
+                return;
+            }
+
+            setLoading(true);
+
+            const registrationData = {
+                // Account information
+                dealer_username: formData.get('dealer_username').trim(),
+                dealer_password: formData.get('dealer_password'),
+                dealer_confirm_password: formData.get('dealer_confirm_password'),
+                
+                // Dealer information
+                dealer_name: formData.get('dealer_name').trim(),
+                dealer_legal_name: formData.get('dealer_legal_name')?.trim() || null,
+                dealer_license_number: formData.get('dealer_license_number')?.trim() || null,
+                dealer_federal_tax_id: formData.get('dealer_federal_tax_id')?.trim() || null,
+                website: formData.get('website')?.trim() || null,
+                
+                // Address information
+                dealer_address: formData.get('dealer_address').trim(),
+                dealer_city: formData.get('dealer_city').trim(),
+                dealer_state: formData.get('dealer_state').trim(),
+                postalCode: formData.get('postalCode').trim(),
+                
+                // Contact information
+                dealer_first_name: formData.get('dealer_first_name').trim(),
+                dealer_last_name: formData.get('dealer_last_name').trim(),
+                dealer_owner_full_name: formData.get('dealer_owner_full_name')?.trim() || null,
+                dealer_contact: formData.get('dealer_contact')?.trim() || null,
+                email: formData.get('email').trim(),
+                phone: formData.get('phone').trim(),
+                
+                // Additional phone numbers
+                dealer_telephone: formData.get('dealer_telephone')?.trim() || null,
+                dealer_fax_number: formData.get('dealer_fax_number')?.trim() || null,
+                dealer_contact_cell_phone: formData.get('dealer_contact_cell_phone')?.trim() || null,
+                dealer_contact_for_approval: formData.get('dealer_contact_for_approval')?.trim() || null
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(registrationData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showAlert('Registration successful! Redirecting to login...', 'success');
+                    
+                    // Redirect to login page after a short delay
+                    setTimeout(() => {
+                        window.location.href = '/login.html?registered=true';
+                    }, 2000);
+                } else {
+                    showAlert(result.message || 'Registration failed. Please try again.');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showAlert('Network error. Please check your connection and try again.');
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // Real-time password confirmation validation
+        document.getElementById('dealer_confirm_password').addEventListener('input', function() {
+            const password = document.getElementById('dealer_password').value;
+            const confirmPassword = this.value;
+            
+            if (confirmPassword && password !== confirmPassword) {
+                this.classList.add('error');
+            } else {
+                this.classList.remove('error');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deal Jacket - Pinnacle Auto Finance</title>
+    <style>
+        :root {
+            --primary-red: #9d0208;
+            --accent-red: #e50c0c;
+            --light-red: #fdf0f0;
+            --dark-text: #333;
+            --light-text: #666;
+            --border-color: #e0e0e0;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --light-bg: #f8f9fa;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: var(--dark-text);
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            color: var(--primary-red);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            background: var(--primary-red);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .nav-btn:hover {
+            background: var(--accent-red);
+        }
+
+        .nav-btn.secondary {
+            background: #6c757d;
+        }
+
+        .nav-btn.secondary:hover {
+            background: #5a6268;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .deal-header {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .deal-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--dark-text);
+        }
+
+        .deal-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status-new { background: #e3f2fd; color: #1976d2; }
+        .status-underwriting { background: #fff3e0; color: #f57c00; }
+        .status-approved { background: #e8f5e8; color: #388e3c; }
+        .status-pending { background: #fff8e1; color: #f9a825; }
+        .status-declined { background: #ffebee; color: #d32f2f; }
+        .status-funded { background: #e8f5e8; color: #2e7d32; }
+
+        .deal-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sidebar-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--dark-text);
+            border-bottom: 2px solid var(--light-red);
+            padding-bottom: 8px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .info-item {
+            margin-bottom: 12px;
+        }
+
+        .info-label {
+            font-weight: 500;
+            color: var(--light-text);
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            color: var(--dark-text);
+        }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .progress-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .progress-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 15px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: #e0e0e0;
+            z-index: 1;
+        }
+
+        .progress-step.active:not(:last-child)::after {
+            background: var(--primary-red);
+        }
+
+        .progress-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-size: 12px;
+            font-weight: bold;
+            position: relative;
+            z-index: 2;
+        }
+
+        .progress-step.active .progress-icon {
+            background: var(--primary-red);
+        }
+
+        .progress-step.completed .progress-icon {
+            background: var(--success-color);
+        }
+
+        .progress-label {
+            font-size: 11px;
+            color: var(--light-text);
+            line-height: 1.2;
+        }
+
+        .progress-step.active .progress-label {
+            color: var(--primary-red);
+            font-weight: 600;
+        }
+
+        .conversations-timeline {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .timeline-item {
+            display: flex;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--light-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .timeline-date {
+            font-size: 12px;
+            color: var(--light-text);
+        }
+
+        .timeline-message {
+            font-size: 13px;
+            color: var(--light-text);
+            line-height: 1.4;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--light-text);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-red);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .deal-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar-content {
+                order: -1;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .deal-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">Pinnacle Auto Finance</div>
+        <div class="nav-buttons">
+            <a href="/dashboard.html" class="nav-btn secondary">← Back to Dashboard</a>
+            <button class="nav-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="alertContainer"></div>
+        
+        <div id="dealContent">
+            <div class="loading">
+                <span class="spinner"></span>
+                Loading deal details...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin + '/api';
+        let authToken = localStorage.getItem('authToken');
+        let dealId = new URLSearchParams(window.location.search).get('id');
+
+        function checkAuth() {
+            if (!authToken) {
+                window.location.href = '/login.html';
+                return false;
+            }
+            return true;
+        }
+
+        function showAlert(message, type = 'error') {
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type}">
+                    ${message}
+                </div>
+            `;
+        }
+
+        function getStatusClass(status) {
+            const statusMap = {
+                'New Deal Submitted': 'status-new',
+                'Underwriting': 'status-underwriting',
+                'Conditional Approval': 'status-approved',
+                'Final Approval': 'status-approved',
+                'Pending Docs': 'status-pending',
+                'Deal Funded': 'status-funded',
+                'Declined': 'status-declined'
+            };
+            return statusMap[status] || 'status-new';
+        }
+
+        function formatCurrency(amount) {
+            if (!amount) return 'N/A';
+            const num = parseFloat(amount.toString().replace(/[$,]/g, ''));
+            return isNaN(num) ? amount : `$${num.toLocaleString()}`;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (error) {
+                return dateString;
+            }
+        }
+
+        function renderProgressBar(currentStatus) {
+            const stages = [
+                { name: 'Deal Submitted', key: 'New Deal Submitted' },
+                { name: 'Conditional Approval', key: 'Conditional Approval' },
+                { name: 'Final Approval', key: 'Final Approval' },
+                { name: 'Documents Ready', key: 'Pending Docs' },
+                { name: 'Original Docs Received', key: 'Original Docs' },
+                { name: 'Deal Funded', key: 'Deal Funded' }
+            ];
+
+            const currentIndex = stages.findIndex(stage => stage.key === currentStatus);
+            
+            return `
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        ${stages.map((stage, index) => {
+                            let stepClass = '';
+                            if (index < currentIndex) stepClass = 'completed';
+                            else if (index === currentIndex) stepClass = 'active';
+                            
+                            return `
+                                <div class="progress-step ${stepClass}">
+                                    <div class="progress-icon">
+                                        ${index < currentIndex ? '✓' : index + 1}
+                                    </div>
+                                    <div class="progress-label">${stage.name}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDealJacket(deal) {
+            return `
+                <div class="deal-header">
+                    <div class="deal-title">
+                        Deal Jacket - ${deal.primaryApplicant.name}
+                    </div>
+                    <div class="deal-status">
+                        <span class="status-badge ${getStatusClass(deal.status)}">
+                            ${deal.status}
+                        </span>
+                        <button class="nav-btn" onclick="window.location.href='/credit_application.html'">
+                            View Details
+                        </button>
+                    </div>
+                </div>
+
+                <div class="deal-content">
+                    <div class="main-content">
+                        <!-- Customer & Deal Information -->
+                        <div class="card">
+                            <div class="card-title">Customer & Deal Information</div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 20px;">
+                                <div>
+                                    <h4 style="margin-bottom: 15px; color: var(--primary-red);">Applicant</h4>
+                                    <div class="info-grid">
+                                        <div class="info-item">
+                                            <div class="info-label">Name</div>
+                                            <div class="info-value">${deal.primaryApplicant.name || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Address</div>
+                                            <div class="info-value">${deal.primaryApplicant.currentAddress || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Phone</div>
+                                            <div class="info-value">${deal.primaryApplicant.phone || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">SSN</div>
+                                            <div class="info-value">${deal.primaryApplicant.ssn || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Residence</div>
+                                            <div class="info-value">${deal.primaryApplicant.addressYears || '0'} yrs. ${deal.primaryApplicant.addressMonths || '0'} mos.</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Employment</div>
+                                            <div class="info-value">${deal.primaryApplicant.employment?.employmentYears || '0'} yrs. ${deal.primaryApplicant.employment?.employmentMonths || '0'} mos.</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Ann. Income</div>
+                                            <div class="info-value">${formatCurrency(deal.primaryApplicant.employment?.income)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                ${deal.coApplicant ? `
+                                <div>
+                                    <h4 style="margin-bottom: 15px; color: var(--primary-red);">Co-Applicant</h4>
+                                    <div class="info-grid">
+                                        <div class="info-item">
+                                            <div class="info-label">Name</div>
+                                            <div class="info-value">${deal.coApplicant.name || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Address</div>
+                                            <div class="info-value">${deal.coApplicant.currentAddress || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">SSN</div>
+                                            <div class="info-value">${deal.coApplicant.ssn || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Employment</div>
+                                            <div class="info-value">${deal.coApplicant.employment?.currentEmployer || 'N/A'}</div>
+                                        </div>
+                                        <div class="info-item">
+                                            <div class="info-label">Ann. Income</div>
+                                            <div class="info-value">${formatCurrency(deal.coApplicant.employment?.income)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                ` : '<div></div>'}
+                            </div>
+                        </div>
+
+                        <!-- Deal Status Progress -->
+                        <div class="card">
+                            <div class="card-title">Deal Status</div>
+                            ${renderProgressBar(deal.status)}
+                        </div>
+
+                        <!-- Conversations History -->
+                        <div class="card">
+                            <div class="card-title">Conversations History</div>
+                            <div class="conversations-timeline">
+                                <div class="timeline-item">
+                                    <div class="timeline-icon">SA</div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-header">
+                                            <div class="timeline-title">Conversation from System Administrator</div>
+                                            <div class="timeline-date">${formatDate(deal.dateAdded)}</div>
+                                        </div>
+                                        <div class="timeline-message">
+                                            Application submitted and under review. Initial processing complete.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="timeline-item">
+                                    <div class="timeline-icon">📄</div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-header">
+                                            <div class="timeline-title">Auto-post on Deal Created</div>
+                                            <div class="timeline-date">${formatDate(deal.dateAdded)}</div>
+                                        </div>
+                                        <div class="timeline-message">
+                                            Contact: Created by System Administrator.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-content">
+                        <!-- Deal Information -->
+                        <div class="card">
+                            <div class="card-title">Deal Information</div>
+                            <div class="info-item">
+                                <div class="info-label">Vehicle</div>
+                                <div class="info-value">${deal.vehicle.year || ''} ${deal.vehicle.makeModel || 'N/A'}</div>
+                            </div>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="info-label">Collateral Type</div>
+                                    <div class="info-value">Auto</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Mileage</div>
+                                    <div class="info-value">${deal.vehicle.mileage || 'N/A'}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Invoice</div>
+                                    <div class="info-value">--</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Net Trade</div>
+                                    <div class="info-value">--</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Selling Price</div>
+                                    <div class="info-value">${formatCurrency(deal.financial.sellingPrice)}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Rebate</div>
+                                    <div class="info-value">--</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Sales Tax</div>
+                                    <div class="info-value">${formatCurrency(deal.financial.taxes)}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Total Down</div>
+                                    <div class="info-value">${formatCurrency(deal.financial.cashDown)}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">TTRL</div>
+                                    <div class="info-value">${formatCurrency(deal.financial.titleFees)}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Requested</div>
+                                    <div class="info-value">${formatCurrency(deal.financial.amountFinanced)}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Other</div>
+                                    <div class="info-value">$0.00</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Term</div>
+                                    <div class="info-value">60</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Program</div>
+                                    <div class="info-value">No</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Wsale Value</div>
+                                    <div class="info-value">${formatCurrency(deal.monetaryValue)}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Routing Override</div>
+                                    <div class="info-value">VIN# ${deal.vehicle.vin || 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Deal Details -->
+                        <div class="card">
+                            <div class="card-title">Additional Details</div>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="info-label">Dealer</div>
+                                    <div class="info-value">${deal.dealer.name || 'N/A'}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Dealer Contact</div>
+                                    <div class="info-value">${deal.dealer.contact || 'N/A'}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Dealer Phone</div>
+                                    <div class="info-value">${deal.dealer.telephone || 'N/A'}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Last Updated</div>
+                                    <div class="info-value">${formatDate(deal.workflow.lastUpdated)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadDealDetails() {
+            if (!dealId) {
+                showAlert('No deal ID provided');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/dashboard/deal/${dealId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        document.getElementById('dealContent').innerHTML = renderDealJacket(result.dealJacket);
+                    } else {
+                        throw new Error('Failed to load deal details');
+                    }
+                } else if (response.status === 404) {
+                    showAlert('Deal not found or access denied');
+                    document.getElementById('dealContent').innerHTML = '<div class="loading">Deal not found</div>';
+                } else {
+                    throw new Error('Failed to load deal details');
+                }
+            } catch (error) {
+                console.error('Deal load error:', error);
+                showAlert('Failed to load deal details. Please try again.');
+                document.getElementById('dealContent').innerHTML = '<div class="loading">Failed to load deal</div>';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userData');
+            window.location.href = '/login.html';
+        }
+
+        // Initialize
+        if (checkAuth()) {
+            loadDealDetails();
+        }
+    </script>
+</body>
+</html>
