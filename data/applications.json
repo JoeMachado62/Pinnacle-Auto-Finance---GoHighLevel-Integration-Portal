@@ -1,0 +1,22 @@
+{
+  "applications": [
+    {
+      "dealerId": "d7215875-1f3d-476b-8e85-dc7dd8aedb87",
+      "applicantName": "Jane Doe",
+      "vehicleInfo": "2023 Honda Accord",
+      "amountFinanced": 25000,
+      "applicantData": {
+        "borrower1_firstName": "Jane",
+        "borrower1_lastName": "Doe",
+        "borrower1_email": "jane@example.com",
+        "vehicle_year": "2023",
+        "vehicle_make_model": "Honda Accord"
+      },
+      "id": "70b18954-34a1-4641-8377-0592a935cf9b",
+      "createdAt": "2025-06-30T11:21:34.766Z",
+      "status": "submitted",
+      "dtStatus": "pending"
+    }
+  ],
+  "lastUpdated": "2025-06-30T11:21:34.766Z"
+}

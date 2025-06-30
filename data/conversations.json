@@ -1,0 +1,20 @@
+{
+  "conversations": [
+    {
+      "applicationId": "70b18954-34a1-4641-8377-0592a935cf9b",
+      "noteType": "system_note",
+      "content": "Test application submitted successfully",
+      "createdBy": "d7215875-1f3d-476b-8e85-dc7dd8aedb87",
+      "createdByName": "John Test",
+      "createdByType": "user",
+      "attachments": [],
+      "isInternal": false,
+      "importanceLevel": "normal",
+      "notificationSent": false,
+      "ghlSynced": false,
+      "id": "cf896f20-fbeb-42d7-be4b-b655f8f975e9",
+      "timestamp": "2025-06-30T11:21:34.768Z"
+    }
+  ],
+  "lastUpdated": "2025-06-30T11:21:34.768Z"
+}

@@ -1,182 +1,491 @@
-// /var/www/paf-ghl/routes/dashboardRoutes.js
+// routes/dashboardRoutes.js - REFACTORED FOR NEW SYSTEM
 const express = require('express');
 const router = express.Router();
+const { authenticateToken, authenticatePremiumDealer, requirePermission } = require('../middleware/auth');
 const dashboardService = require('../services/dashboardService');
-const { authenticateToken } = require('../middleware/auth');
-const logger = require('../utils/logger');
+const db = require('../services/databaseService');
+const ghlApiService = require('../services/ghlApiService');
+const { logger, logBusiness, logSecurity } = require('../utils/logger');
 
-// GET /api/dashboard/deals - Get all deals for the authenticated dealer
-router.get('/deals', authenticateToken, async (req, res) => {
-    try {
-        const { dealerLicenseNumber, finNumber } = req.dealerIdentifier;
-        
-        logger.info(`Fetching deals for dealer: ${req.user.dealerName} (License: ${dealerLicenseNumber}, FIN: ${finNumber})`);
+// ===== GET DEALER DASHBOARD DATA =====
+router.get('/', 
+    authenticateToken,
+    requirePermission('view_own_dashboard'),
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            
+            logBusiness('Dashboard access', {
+                dealerId: dealer.id,
+                dealerName: dealer.dealerName,
+                subscriptionTier: dealer.subscriptionTier
+            });
 
-        const deals = await dashboardService.getDealsForDealer(dealerLicenseNumber, finNumber);
+            const dashboardData = await dashboardService.getDealerDashboardData(dealer);
 
-        res.json({
-            success: true,
-            dealer: {
-                name: req.user.dealerName,
-                licenseNumber: dealerLicenseNumber,
-                finNumber: finNumber
-            },
-            deals: deals,
-            totalDeals: deals.length
-        });
+            res.json({
+                success: true,
+                dashboard: dashboardData
+            });
 
-    } catch (error) {
-        logger.error('Error fetching dealer deals:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch deals',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    }
-});
+        } catch (error) {
+            logger.error('Dashboard data fetch error:', {
+                error: error.message,
+                dealerId: req.user ? req.user.id : null,
+                stack: error.stack
+            });
 
-// GET /api/dashboard/deal/:opportunityId - Get detailed deal jacket for specific opportunity
-router.get('/deal/:opportunityId', authenticateToken, async (req, res) => {
-    try {
-        const { opportunityId } = req.params;
-        const { dealerLicenseNumber, finNumber } = req.dealerIdentifier;
-
-        logger.info(`Fetching deal details for opportunity: ${opportunityId}, dealer: ${req.user.dealerName}`);
-
-        const dealJacket = await dashboardService.getDealDetails(opportunityId, dealerLicenseNumber, finNumber);
-
-        res.json({
-            success: true,
-            dealJacket: dealJacket
-        });
-
-    } catch (error) {
-        logger.error('Error fetching deal details:', error);
-        
-        if (error.message.includes('not found') || error.message.includes('access denied')) {
-            return res.status(404).json({
+            res.status(500).json({
                 success: false,
-                message: 'Deal not found or access denied'
+                message: 'Failed to load dashboard data'
             });
         }
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch deal details',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
     }
-});
+);
 
-// GET /api/dashboard/featured-vehicles - Get featured vehicle cards for sidebar
-router.get('/featured-vehicles', async (req, res) => {
-    try {
-        // For now, return placeholder data
-        // TODO: Implement admin-managed featured vehicles
-        const featuredVehicles = [
-            {
-                id: 1,
-                title: "CERTIFIED USED 2.4L 2021 ACURA ILX...",
-                price: "$12,000",
-                badge: "FEATURED CLASSIFIED",
-                image: "/images/placeholder-car1.jpg",
-                details: "2.4L • 2021 • Manual",
-                active: true
-            },
-            {
-                id: 2,
-                title: "USED 2.0L 2020 KIA SPORTAGE",
-                price: "$22,000",
-                badge: "SPECIAL",
-                image: "/images/placeholder-car2.jpg",
-                details: "2.0L • 2020 • Automatic",
-                active: true
-            },
-            {
-                id: 3,
-                title: "NEW ELECTRICAL 2022 TESLA ROADSTER...",
-                price: "$120,000",
-                badge: "SPECIAL",
-                image: "/images/placeholder-car3.jpg",
-                details: "Electrical • 2022 • Automatic",
-                active: true
+// ===== GET DEALER STATISTICS =====
+router.get('/stats', 
+    authenticateToken,
+    requirePermission('view_own_dashboard'),
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            const { timeframe = '30d' } = req.query;
+
+            const stats = await dashboardService.getDealerPerformanceMetrics(dealer, timeframe);
+
+            res.json({
+                success: true,
+                statistics: stats,
+                dealer: {
+                    name: dealer.dealerName,
+                    tier: dealer.subscriptionTier
+                }
+            });
+
+        } catch (error) {
+            logger.error('Dashboard stats error:', {
+                error: error.message,
+                dealerId: req.user ? req.user.id : null
+            });
+
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch statistics'
+            });
+        }
+    }
+);
+
+// ===== GET RECENT APPLICATIONS =====
+router.get('/recent-applications', 
+    authenticateToken,
+    requirePermission('view_own_applications'),
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            const { limit = 10 } = req.query;
+
+            const applications = await db.getDealerApplications(dealer.id, parseInt(limit));
+            
+            // Format for dashboard display
+            const formattedApps = applications.map(app => ({
+                id: app.id,
+                applicantName: app.applicantName,
+                vehicleInfo: app.vehicleInfo,
+                amountFinanced: app.amountFinanced,
+                status: app.status,
+                dtStatus: app.dtStatus,
+                createdAt: app.createdAt,
+                timeAgo: getTimeAgo(app.createdAt),
+                urgency: calculateUrgency(app)
+            }));
+
+            res.json({
+                success: true,
+                applications: formattedApps
+            });
+
+        } catch (error) {
+            logger.error('Recent applications error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch recent applications'
+            });
+        }
+    }
+);
+
+// ===== GET ACTIVITY FEED =====
+router.get('/activity', 
+    authenticateToken,
+    requirePermission('view_own_dashboard'),
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            const { limit = 20 } = req.query;
+
+            const applications = await db.getDealerApplications(dealer.id, 50);
+            const recentActivity = await dashboardService.getRecentActivity(dealer.id, applications);
+
+            res.json({
+                success: true,
+                activity: recentActivity.slice(0, parseInt(limit))
+            });
+
+        } catch (error) {
+            logger.error('Activity feed error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch activity feed'
+            });
+        }
+    }
+);
+
+// ===== PREMIUM: GET GHL DASHBOARD DATA =====
+router.get('/ghl-data', 
+    authenticatePremiumDealer,
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+
+            if (!dealer.ghlIntegrationEnabled) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'GHL integration not enabled'
+                });
             }
-        ];
 
-        res.json({
-            success: true,
-            vehicles: featuredVehicles.filter(v => v.active)
-        });
+            const applications = await db.getDealerApplications(dealer.id, 100);
+            const ghlData = await dashboardService.getGHLDashboardData(dealer, applications);
 
-    } catch (error) {
-        logger.error('Error fetching featured vehicles:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch featured vehicles',
-            vehicles: []
-        });
+            logBusiness('GHL dashboard access', {
+                dealerId: dealer.id,
+                integratedApps: ghlData.integratedApplications || 0
+            });
+
+            res.json({
+                success: true,
+                ghlData: ghlData
+            });
+
+        } catch (error) {
+            logger.error('GHL dashboard data error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch GHL data'
+            });
+        }
     }
-});
+);
 
-// GET /api/dashboard/account-manager - Get account manager info for dealer
-router.get('/account-manager', authenticateToken, async (req, res) => {
-    try {
-        // For now, return placeholder data
-        // TODO: Implement dealer-specific account manager assignment
-        const accountManager = {
-            name: "J.C. Lopez",
-            title: "Broker Finance Sales",
-            email: "financebrokerdealss@gmail.com",
-            phone: "(786) 731 - 8403",
-            address: "Miami, Florida",
-            officeAddress: "346 Washington Street, Stoughton,MA02072",
-            photo: "/images/account-manager-placeholder.jpg"
-        };
+// ===== GET DEALER PROFILE FOR DASHBOARD =====
+router.get('/profile', 
+    authenticateToken,
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            
+            // Get additional profile stats
+            const applications = await db.getDealerApplications(dealer.id, 10);
+            const stats = {
+                totalApplications: applications.length,
+                pendingApplications: applications.filter(app => app.status === 'submitted').length,
+                lastApplicationDate: applications.length > 0 ? applications[0].createdAt : null,
+                memberSince: dealer.createdAt,
+                lastLogin: dealer.lastLogin
+            };
 
-        res.json({
-            success: true,
-            accountManager: accountManager
-        });
+            const profileData = {
+                dealer: {
+                    id: dealer.id,
+                    email: dealer.email,
+                    dealerName: dealer.dealerName,
+                    contactName: dealer.contactName,
+                    phone: dealer.phone,
+                    address: dealer.address,
+                    dealerLicenseNumber: dealer.dealerLicenseNumber,
+                    finNumber: dealer.finNumber,
+                    subscriptionTier: dealer.subscriptionTier,
+                    ghlIntegrationEnabled: dealer.ghlIntegrationEnabled,
+                    stats: stats
+                },
+                features: {
+                    canSubmitApplications: true,
+                    canViewApplications: true,
+                    canManageProfile: true,
+                    hasBasicReporting: true,
+                    hasAdvancedReporting: dealer.subscriptionTier === 'premium',
+                    hasGHLIntegration: dealer.subscriptionTier === 'premium' && dealer.ghlIntegrationEnabled,
+                    hasMarketingTools: dealer.subscriptionTier === 'premium'
+                }
+            };
 
-    } catch (error) {
-        logger.error('Error fetching account manager:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch account manager info'
-        });
+            res.json({
+                success: true,
+                profile: profileData
+            });
+
+        } catch (error) {
+            logger.error('Dashboard profile error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch profile data'
+            });
+        }
     }
-});
+);
 
-// GET /api/dashboard/stats - Get dashboard statistics for dealer
-router.get('/stats', authenticateToken, async (req, res) => {
-    try {
-        const { dealerLicenseNumber, finNumber } = req.dealerIdentifier;
-        
-        const deals = await dashboardService.getDealsForDealer(dealerLicenseNumber, finNumber);
-        
-        // Calculate statistics
-        const stats = {
-            totalDeals: deals.length,
-            pendingDeals: deals.filter(d => ['New Deal Submitted', 'Underwriting', 'Pending Docs'].includes(d.status)).length,
-            approvedDeals: deals.filter(d => ['Conditional Approval', 'Final Approval'].includes(d.status)).length,
-            fundedDeals: deals.filter(d => d.status === 'Deal Funded').length,
-            declinedDeals: deals.filter(d => d.status === 'Declined').length,
-            totalVolume: deals.reduce((sum, deal) => sum + (deal.monetaryValue || 0), 0),
-            averageDealSize: deals.length > 0 ? deals.reduce((sum, deal) => sum + (deal.monetaryValue || 0), 0) / deals.length : 0
-        };
+// ===== UPDATE DEALER PROFILE =====
+router.put('/profile', 
+    authenticateToken,
+    requirePermission('manage_own_profile'),
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            const { contactName, phone, address, dealerName } = req.body;
 
-        res.json({
-            success: true,
-            stats: stats
-        });
+            // Validate input
+            const updates = {};
+            if (contactName && contactName.trim()) updates.contactName = contactName.trim();
+            if (phone && phone.trim()) updates.phone = phone.trim();
+            if (address && address.trim()) updates.address = address.trim();
+            if (dealerName && dealerName.trim()) updates.dealerName = dealerName.trim();
 
-    } catch (error) {
-        logger.error('Error fetching dashboard stats:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch dashboard statistics'
-        });
+            if (Object.keys(updates).length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No valid updates provided'
+                });
+            }
+
+            const updatedDealer = await db.updateDealer(dealer.id, updates);
+
+            logBusiness('Profile updated', {
+                dealerId: dealer.id,
+                updatedFields: Object.keys(updates)
+            });
+
+            res.json({
+                success: true,
+                message: 'Profile updated successfully',
+                dealer: {
+                    id: updatedDealer.id,
+                    email: updatedDealer.email,
+                    dealerName: updatedDealer.dealerName,
+                    contactName: updatedDealer.contactName,
+                    phone: updatedDealer.phone,
+                    address: updatedDealer.address,
+                    subscriptionTier: updatedDealer.subscriptionTier
+                }
+            });
+
+        } catch (error) {
+            logger.error('Profile update error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update profile'
+            });
+        }
     }
-});
+);
+
+// ===== GET SYSTEM HEALTH (ADMIN) =====
+router.get('/health', 
+    authenticateToken,
+    async (req, res) => {
+        try {
+            const health = await dashboardService.getSystemHealth();
+            
+            res.json({
+                success: true,
+                health: health
+            });
+
+        } catch (error) {
+            logger.error('System health check error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Health check failed',
+                health: {
+                    status: 'unhealthy',
+                    error: error.message
+                }
+            });
+        }
+    }
+);
+
+// ===== PREMIUM: GHL WORKFLOW TRIGGERS =====
+router.post('/ghl/trigger-workflow', 
+    authenticatePremiumDealer,
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            const { contactId, workflowType, data } = req.body;
+
+            if (!dealer.ghlIntegrationEnabled) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'GHL integration not enabled'
+                });
+            }
+
+            if (!contactId || !workflowType) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Contact ID and workflow type are required'
+                });
+            }
+
+            // Verify contact belongs to this dealer
+            const applications = await db.getDealerApplications(dealer.id, 1000);
+            const application = applications.find(app => app.ghlMarketingContactId === contactId);
+            
+            if (!application) {
+                logSecurity('Unauthorized GHL access attempt', {
+                    dealerId: dealer.id,
+                    contactId: contactId,
+                    workflowType: workflowType
+                });
+                
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied to this contact'
+                });
+            }
+
+            // Trigger the workflow
+            await ghlApiService.triggerWorkflow(contactId, workflowType, data);
+
+            // Log the workflow trigger
+            await db.addConversationNote(application.id, {
+                content: `GHL workflow triggered: ${workflowType}`,
+                noteType: 'system_note',
+                createdBy: dealer.id,
+                createdByName: dealer.contactName,
+                createdByType: 'dealer',
+                importanceLevel: 'normal'
+            });
+
+            logBusiness('GHL workflow triggered', {
+                dealerId: dealer.id,
+                applicationId: application.id,
+                workflowType: workflowType,
+                contactId: contactId
+            });
+
+            res.json({
+                success: true,
+                message: 'Workflow triggered successfully'
+            });
+
+        } catch (error) {
+            logger.error('GHL workflow trigger error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to trigger workflow'
+            });
+        }
+    }
+);
+
+// ===== EXPORT DASHBOARD DATA =====
+router.get('/export', 
+    authenticateToken,
+    requirePermission('view_own_applications'),
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            const { format = 'json', timeframe = '30d' } = req.query;
+
+            if (format !== 'json') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Only JSON format is currently supported'
+                });
+            }
+
+            const applications = await db.getDealerApplications(dealer.id, 1000);
+            const stats = await dashboardService.getDealerPerformanceMetrics(dealer, timeframe);
+
+            const exportData = {
+                dealer: {
+                    name: dealer.dealerName,
+                    contactName: dealer.contactName,
+                    email: dealer.email,
+                    licenseNumber: dealer.dealerLicenseNumber,
+                    subscriptionTier: dealer.subscriptionTier
+                },
+                statistics: stats,
+                applications: applications.map(app => ({
+                    id: app.id,
+                    applicantName: app.applicantName,
+                    vehicleInfo: app.vehicleInfo,
+                    amountFinanced: app.amountFinanced,
+                    status: app.status,
+                    dtStatus: app.dtStatus,
+                    createdAt: app.createdAt,
+                    updatedAt: app.updatedAt
+                })),
+                exportedAt: new Date().toISOString(),
+                exportedBy: dealer.contactName
+            };
+
+            logBusiness('Dashboard data exported', {
+                dealerId: dealer.id,
+                format: format,
+                applicationCount: applications.length
+            });
+
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Content-Disposition', `attachment; filename="dashboard-export-${dealer.id}-${Date.now()}.json"`);
+            res.json(exportData);
+
+        } catch (error) {
+            logger.error('Dashboard export error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to export dashboard data'
+            });
+        }
+    }
+);
+
+// ===== UTILITY FUNCTIONS =====
+function getTimeAgo(timestamp) {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 60) {
+        return `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+        return `${diffHours}h ago`;
+    } else if (diffDays < 7) {
+        return `${diffDays}d ago`;
+    } else {
+        return date.toLocaleDateString();
+    }
+}
+
+function calculateUrgency(application) {
+    const now = new Date();
+    const created = new Date(application.createdAt);
+    const hoursSinceCreated = (now - created) / (1000 * 60 * 60);
+    
+    if (application.status === 'submitted' && hoursSinceCreated > 24) {
+        return 'high';
+    } else if (application.status === 'processing' && hoursSinceCreated > 48) {
+        return 'high';
+    } else if (hoursSinceCreated > 12) {
+        return 'medium';
+    }
+    return 'low';
+}
 
 module.exports = router;

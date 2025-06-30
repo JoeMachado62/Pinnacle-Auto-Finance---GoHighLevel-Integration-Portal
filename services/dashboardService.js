@@ -1,296 +1,476 @@
-// /var/www/paf-ghl/services/dashboardService.js
-const axios = require('axios');
+// services/dashboardService.js - REFACTORED FOR NEW SYSTEM
+const db = require('./databaseService');
+const ghlApiService = require('./ghlApiService');
+const { logger } = require('../utils/logger');
 const config = require('../config');
-const logger = require('../utils/logger');
-
-const ghlApi = axios.create({
-    baseURL: config.GHL_API_BASE_URL,
-    headers: {
-        'Authorization': `Bearer ${config.GHL_API_KEY}`,
-        'Version': config.GHL_API_VERSION,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-    },
-    timeout: 15000,
-});
 
 class DashboardService {
     
-    async getDealsForDealer(dealerLicenseNumber, finNumber) {
+    async getDealerDashboardData(dealer) {
         try {
-            logger.info(`Fetching deals for dealer - License: ${dealerLicenseNumber}, FIN: ${finNumber}`);
-            logger.info(`Using GHL_LOCATION_ID: ${config.GHL_LOCATION_ID}, GHL_DEALS_PIPELINE_ID: ${config.GHL_DEALS_PIPELINE_ID}`);
-
-            // Get all opportunities from the Pinnacle Pipeline
-            const opportunitiesResponse = await ghlApi.get('/opportunities/search', {
-                params: {
-                    locationId: config.GHL_LOCATION_ID,
-                    pipelineId: config.GHL_DEALS_PIPELINE_ID,
-                    limit: 100 // Adjust as needed
-                }
-            });
-
-            const opportunities = opportunitiesResponse.data.opportunities || [];
-            logger.info(`Found ${opportunities.length} total opportunities in pipeline`);
-
-            // Filter opportunities for this dealer and get contact details
-            const dealerDeals = [];
+            logger.info(`Fetching dashboard data for dealer: ${dealer.dealerName} (${dealer.subscriptionTier})`);
             
-            for (const opportunity of opportunities) {
-                try {
-                    // Get the contact details for this opportunity
-                    const contactResponse = await ghlApi.get(`/contacts/${opportunity.contactId}`);
-                    const contact = contactResponse.data.contact;
-
-                    // Check if this deal belongs to the current dealer
-                    const contactDealerLicense = this.getCustomFieldValue(contact.customFields, 'dealer_license_number');
-                    const contactFinNumber = this.getCustomFieldValue(contact.customFields, 'fin_number');
-
-                    const isMatchingDealer = 
-                        (dealerLicenseNumber && contactDealerLicense === dealerLicenseNumber) ||
-                        (finNumber && contactFinNumber === finNumber);
-
-                    if (isMatchingDealer) {
-                        // Get pipeline stage name
-                        const stageName = await this.getStageNameById(opportunity.pipelineStageId);
-                        
-                        // Extract relevant data for dashboard display
-                        const dealData = {
-                            opportunityId: opportunity.id,
-                            contactId: opportunity.contactId,
-                            clientName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown',
-                            startDate: this.formatDate(opportunity.dateAdded),
-                            status: stageName || 'Unknown',
-                            nextAction: this.determineNextAction(stageName),
-                            vin: this.getCustomFieldValue(contact.customFields, 'vehicle_vin') || 'N/A',
-                            loanNumber: opportunity.id.slice(-6), // Use last 6 chars of opportunity ID as loan number
-                            messageCount: 0, // TODO: Implement message counting
-                            lastMessage: 'No messages', // TODO: Implement last message
-                            monetaryValue: opportunity.monetaryValue || 0,
-                            vehicleInfo: this.extractVehicleInfo(contact.customFields),
-                            dealerInfo: {
-                                dealerName: this.getCustomFieldValue(contact.customFields, 'dealer_name'),
-                                dealerLicense: contactDealerLicense,
-                                finNumber: contactFinNumber
-                            }
-                        };
-
-                        dealerDeals.push(dealData);
-                    }
-                } catch (contactError) {
-                    logger.error(`Error fetching contact ${opportunity.contactId}:`, contactError.message);
-                    // Continue with other opportunities
-                }
-            }
-
-            logger.info(`Found ${dealerDeals.length} deals for dealer`);
+            // Get dealer's applications
+            const applications = await db.getDealerApplications(dealer.id, 50);
             
-            // Sort by start date (newest first)
-            dealerDeals.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
-
-            return dealerDeals;
-
-        } catch (error) {
-            logger.error('Error fetching dealer deals:', error);
-            throw new Error(`Failed to fetch deals: ${error.message}`);
-        }
-    }
-
-    async getDealDetails(opportunityId, dealerLicenseNumber, finNumber) {
-        try {
-            logger.info(`Fetching deal details for opportunity: ${opportunityId}`);
-
-            // Get opportunity details
-            const opportunityResponse = await ghlApi.get(`/opportunities/${opportunityId}`);
-            const opportunity = opportunityResponse.data.opportunity;
-
-            // Get contact details
-            const contactResponse = await ghlApi.get(`/contacts/${opportunity.contactId}`);
-            const contact = contactResponse.data.contact;
-
-            // Verify this deal belongs to the requesting dealer
-            const contactDealerLicense = this.getCustomFieldValue(contact.customFields, 'dealer_license_number');
-            const contactFinNumber = this.getCustomFieldValue(contact.customFields, 'fin_number');
-
-            const isMatchingDealer = 
-                (dealerLicenseNumber && contactDealerLicense === dealerLicenseNumber) ||
-                (finNumber && contactFinNumber === finNumber);
-
-            if (!isMatchingDealer) {
-                throw new Error('Deal not found or access denied');
-            }
-
-            // Get pipeline stage name
-            const stageName = await this.getStageNameById(opportunity.pipelineStageId);
-
-            // Build comprehensive deal jacket data
-            const dealJacket = {
-                // Basic deal info
-                opportunityId: opportunity.id,
-                contactId: opportunity.contactId,
-                status: stageName || 'Unknown',
-                monetaryValue: opportunity.monetaryValue || 0,
-                dateAdded: opportunity.dateAdded,
-                
-                // Primary applicant info
-                primaryApplicant: {
-                    name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
-                    firstName: contact.firstName,
-                    lastName: contact.lastName,
-                    email: contact.email,
-                    phone: contact.phone,
-                    dob: this.getCustomFieldValue(contact.customFields, 'borrower1_dob'),
-                    ssn: this.maskSSN(this.getCustomFieldValue(contact.customFields, 'borrower1_ssn')),
-                    driversLicense: this.getCustomFieldValue(contact.customFields, 'borrower1_drivers_license'),
-                    currentAddress: this.getCustomFieldValue(contact.customFields, 'borrower1_current_address'),
-                    addressYears: this.getCustomFieldValue(contact.customFields, 'borrower1_current_address_years'),
-                    addressMonths: this.getCustomFieldValue(contact.customFields, 'borrower1_current_address_months'),
-                    employment: {
-                        currentEmployer: this.getCustomFieldValue(contact.customFields, 'borrower1_current_employer'),
-                        title: this.getCustomFieldValue(contact.customFields, 'borrower1_title'),
-                        employerAddress: this.getCustomFieldValue(contact.customFields, 'borrower1_employer_address'),
-                        income: this.getCustomFieldValue(contact.customFields, 'borrower1_income'),
-                        employmentYears: this.getCustomFieldValue(contact.customFields, 'borrower1_employment_years'),
-                        employmentMonths: this.getCustomFieldValue(contact.customFields, 'borrower1_employment_months')
-                    }
-                },
-
-                // Co-applicant info (if exists)
-                coApplicant: this.extractCoApplicantInfo(contact.customFields),
-
-                // Vehicle information
-                vehicle: {
-                    year: this.getCustomFieldValue(contact.customFields, 'vehicle_year'),
-                    makeModel: this.getCustomFieldValue(contact.customFields, 'vehicle_make_model'),
-                    vin: this.getCustomFieldValue(contact.customFields, 'vehicle_vin'),
-                    mileage: this.getCustomFieldValue(contact.customFields, 'vehicle_mileage'),
-                    trim: this.getCustomFieldValue(contact.customFields, 'vehicle_trim')
-                },
-
-                // Financial information
-                financial: {
-                    sellingPrice: this.getCustomFieldValue(contact.customFields, 'selling_price'),
-                    amountFinanced: this.getCustomFieldValue(contact.customFields, 'amountFinanced'),
-                    cashDown: this.getCustomFieldValue(contact.customFields, 'cash_down'),
-                    tradeValue: this.getCustomFieldValue(contact.customFields, 'trade_value'),
-                    tradePayoff: this.getCustomFieldValue(contact.customFields, 'trade_payoff'),
-                    taxes: this.getCustomFieldValue(contact.customFields, 'taxes'),
-                    docFees: this.getCustomFieldValue(contact.customFields, 'doc_fees'),
-                    titleFees: this.getCustomFieldValue(contact.customFields, 'title_fees')
-                },
-
-                // Dealer information
+            // Calculate statistics
+            const statistics = this.calculateDealerStatistics(applications);
+            
+            // Get recent activity
+            const recentActivity = await this.getRecentActivity(dealer.id, applications);
+            
+            // Base dashboard data
+            const dashboardData = {
                 dealer: {
-                    name: this.getCustomFieldValue(contact.customFields, 'dealer_name'),
-                    telephone: this.getCustomFieldValue(contact.customFields, 'dealer_telephone'),
-                    contact: this.getCustomFieldValue(contact.customFields, 'dealer_contact'),
-                    licenseNumber: contactDealerLicense,
-                    finNumber: contactFinNumber
+                    id: dealer.id,
+                    name: dealer.dealerName,
+                    contactName: dealer.contactName,
+                    email: dealer.email,
+                    tier: dealer.subscriptionTier,
+                    licenseNumber: dealer.dealerLicenseNumber,
+                    finNumber: dealer.finNumber,
+                    lastLogin: dealer.lastLogin,
+                    memberSince: dealer.createdAt
                 },
-
-                // Status and workflow info
-                workflow: {
-                    currentStage: stageName,
-                    nextAction: this.determineNextAction(stageName),
-                    lastUpdated: opportunity.dateUpdated || opportunity.dateAdded
+                applications: this.formatApplicationsForDashboard(applications),
+                statistics: statistics,
+                recentActivity: recentActivity,
+                features: {
+                    canSubmitApplications: true,
+                    canViewAllApplications: true,
+                    canManageProfile: true,
+                    hasBasicReporting: true,
+                    canAddNotes: true
                 }
             };
-
-            return dealJacket;
-
-        } catch (error) {
-            logger.error('Error fetching deal details:', error);
-            throw new Error(`Failed to fetch deal details: ${error.message}`);
-        }
-    }
-
-    // Helper methods
-    getCustomFieldValue(customFields, fieldKey) {
-        if (!customFields || !Array.isArray(customFields)) return null;
-        
-        const field = customFields.find(f => f.key === fieldKey || f.id === fieldKey);
-        return field ? field.value : null;
-    }
-
-    async getStageNameById(stageId) {
-        try {
-            // This could be cached for better performance
-            const pipelineResponse = await ghlApi.get(`/pipelines/${config.GHL_DEALS_PIPELINE_ID}`);
-            const pipeline = pipelineResponse.data.pipeline;
             
-            const stage = pipeline.stages.find(s => s.id === stageId);
-            return stage ? stage.name : null;
+            // Premium dealer enhancements
+            if (dealer.subscriptionTier === 'premium') {
+                dashboardData.features = {
+                    ...dashboardData.features,
+                    hasAdvancedReporting: true,
+                    hasMarketingTools: true,
+                    hasGHLIntegration: dealer.ghlIntegrationEnabled,
+                    canTriggerWorkflows: dealer.ghlIntegrationEnabled,
+                    hasCustomDashboard: true
+                };
+                
+                // Add GHL integration data if enabled
+                if (dealer.ghlIntegrationEnabled) {
+                    try {
+                        const ghlData = await this.getGHLDashboardData(dealer, applications);
+                        dashboardData.ghlIntegration = ghlData;
+                    } catch (ghlError) {
+                        logger.warn(`GHL dashboard data fetch failed for dealer ${dealer.id}:`, ghlError);
+                        dashboardData.ghlIntegration = {
+                            status: 'error',
+                            message: 'GHL integration temporarily unavailable'
+                        };
+                    }
+                }
+            }
+            
+            return dashboardData;
+            
         } catch (error) {
-            logger.error('Error fetching stage name:', error);
-            return null;
+            logger.error(`Error fetching dashboard data for dealer ${dealer.id}:`, error);
+            throw new Error('Failed to fetch dashboard data');
         }
     }
-
-    determineNextAction(stageName) {
-        const stageActions = {
-            'New Deal Submitted': 'Document Review',
-            'Underwriting': 'Credit Check',
-            'Conditional Approval': 'Submit Stipulations',
-            'Pending Docs': 'Upload Documents',
-            'Final Approval': 'Schedule Closing',
-            'Deal Funded': 'Complete',
-            'Declined': 'Review Options'
+    
+    calculateDealerStatistics(applications) {
+        const stats = {
+            total: applications.length,
+            pending: 0,
+            processing: 0,
+            approved: 0,
+            declined: 0,
+            funded: 0,
+            totalAmount: 0,
+            averageAmount: 0,
+            thisMonth: 0,
+            thisWeek: 0,
+            approvalRate: 0
         };
-
-        return stageActions[stageName] || 'Contact Support';
-    }
-
-    extractVehicleInfo(customFields) {
-        return {
-            year: this.getCustomFieldValue(customFields, 'vehicle_year'),
-            makeModel: this.getCustomFieldValue(customFields, 'vehicle_make_model'),
-            vin: this.getCustomFieldValue(customFields, 'vehicle_vin'),
-            mileage: this.getCustomFieldValue(customFields, 'vehicle_mileage')
-        };
-    }
-
-    extractCoApplicantInfo(customFields) {
-        const firstName = this.getCustomFieldValue(customFields, 'borrower2_firstName');
-        const lastName = this.getCustomFieldValue(customFields, 'borrower2_lastName');
         
-        if (!firstName && !lastName) return null;
-
+        if (applications.length === 0) {
+            return stats;
+        }
+        
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        
+        let totalAmountSum = 0;
+        let approvedCount = 0;
+        let declinedCount = 0;
+        
+        applications.forEach(app => {
+            const appDate = new Date(app.createdAt);
+            const amount = parseFloat(app.amountFinanced) || 0;
+            totalAmountSum += amount;
+            
+            // Status counts
+            switch (app.status) {
+                case 'submitted':
+                    stats.pending++;
+                    break;
+                case 'processing':
+                    stats.processing++;
+                    break;
+                case 'approved':
+                    stats.approved++;
+                    approvedCount++;
+                    break;
+                case 'declined':
+                    stats.declined++;
+                    declinedCount++;
+                    break;
+                case 'funded':
+                    stats.funded++;
+                    approvedCount++; // Funded counts as approved for rate calculation
+                    break;
+            }
+            
+            // Time-based counts
+            if (appDate >= startOfMonth) {
+                stats.thisMonth++;
+            }
+            if (appDate >= startOfWeek) {
+                stats.thisWeek++;
+            }
+        });
+        
+        stats.totalAmount = totalAmountSum;
+        stats.averageAmount = totalAmountSum / applications.length;
+        
+        // Calculate approval rate
+        const decisionsCount = approvedCount + declinedCount;
+        if (decisionsCount > 0) {
+            stats.approvalRate = (approvedCount / decisionsCount) * 100;
+        }
+        
+        return stats;
+    }
+    
+    formatApplicationsForDashboard(applications) {
+        return applications.slice(0, 10).map(app => ({
+            id: app.id,
+            applicantName: app.applicantName,
+            vehicleInfo: app.vehicleInfo,
+            amountFinanced: app.amountFinanced,
+            status: app.status,
+            dtStatus: app.dtStatus,
+            dtReference: app.dtReferenceNumber,
+            createdAt: app.createdAt,
+            updatedAt: app.updatedAt,
+            hasGHLIntegration: !!app.ghlMarketingContactId,
+            statusDisplay: this.getStatusDisplay(app.status, app.dtStatus),
+            urgency: this.calculateUrgency(app)
+        }));
+    }
+    
+    getStatusDisplay(status, dtStatus) {
+        const statusMap = {
+            'submitted': { label: 'Submitted', color: 'blue', priority: 1 },
+            'processing': { label: 'Processing', color: 'yellow', priority: 2 },
+            'approved': { label: 'Approved', color: 'green', priority: 3 },
+            'declined': { label: 'Declined', color: 'red', priority: 3 },
+            'funded': { label: 'Funded', color: 'green', priority: 4 }
+        };
+        
+        const dtStatusMap = {
+            'pending': { label: 'Pending DT', color: 'gray' },
+            'submitted': { label: 'In DealerTrack', color: 'blue' },
+            'processing': { label: 'DT Processing', color: 'yellow' },
+            'approved': { label: 'DT Approved', color: 'green' },
+            'declined': { label: 'DT Declined', color: 'red' },
+            'funded': { label: 'Funded', color: 'green' }
+        };
+        
         return {
-            name: `${firstName || ''} ${lastName || ''}`.trim(),
-            firstName: firstName,
-            lastName: lastName,
-            dob: this.getCustomFieldValue(customFields, 'borrower2_dob'),
-            ssn: this.maskSSN(this.getCustomFieldValue(customFields, 'borrower2_ssn')),
-            driversLicense: this.getCustomFieldValue(customFields, 'borrower2_drivers_license'),
-            currentAddress: this.getCustomFieldValue(customFields, 'borrower2_current_address'),
-            employment: {
-                currentEmployer: this.getCustomFieldValue(customFields, 'borrower2_current_employer'),
-                title: this.getCustomFieldValue(customFields, 'borrower2_title'),
-                income: this.getCustomFieldValue(customFields, 'borrower2_income')
+            primary: statusMap[status] || { label: status, color: 'gray', priority: 0 },
+            secondary: dtStatusMap[dtStatus] || { label: dtStatus, color: 'gray' }
+        };
+    }
+    
+    calculateUrgency(application) {
+        const now = new Date();
+        const created = new Date(application.createdAt);
+        const hoursSinceCreated = (now - created) / (1000 * 60 * 60);
+        
+        if (application.status === 'submitted' && hoursSinceCreated > 24) {
+            return 'high';
+        } else if (application.status === 'processing' && hoursSinceCreated > 48) {
+            return 'high';
+        } else if (hoursSinceCreated > 12) {
+            return 'medium';
+        }
+        return 'low';
+    }
+    
+    async getRecentActivity(dealerId, applications) {
+        try {
+            const activities = [];
+            
+            // Get recent conversations for all applications
+            const recentApplications = applications.slice(0, 5);
+            
+            for (const app of recentApplications) {
+                const conversations = await db.getConversationsByApplicationId(app.id);
+                const recentConversations = conversations.slice(-3); // Last 3 conversations
+                
+                recentConversations.forEach(conv => {
+                    activities.push({
+                        type: 'conversation',
+                        applicationId: app.id,
+                        applicantName: app.applicantName,
+                        content: conv.content,
+                        createdBy: conv.createdByName,
+                        timestamp: conv.timestamp,
+                        noteType: conv.noteType,
+                        importance: conv.importanceLevel
+                    });
+                });
+            }
+            
+            // Add application submissions
+            applications.slice(0, 5).forEach(app => {
+                activities.push({
+                    type: 'application_submitted',
+                    applicationId: app.id,
+                    applicantName: app.applicantName,
+                    vehicleInfo: app.vehicleInfo,
+                    amountFinanced: app.amountFinanced,
+                    timestamp: app.createdAt
+                });
+            });
+            
+            // Sort by timestamp (most recent first) and limit
+            return activities
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 20)
+                .map(activity => ({
+                    ...activity,
+                    timeAgo: this.getTimeAgo(activity.timestamp)
+                }));
+                
+        } catch (error) {
+            logger.error(`Error getting recent activity for dealer ${dealerId}:`, error);
+            return [];
+        }
+    }
+    
+    getTimeAgo(timestamp) {
+        const now = new Date();
+        const date = new Date(timestamp);
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        
+        if (diffMins < 60) {
+            return `${diffMins}m ago`;
+        } else if (diffHours < 24) {
+            return `${diffHours}h ago`;
+        } else if (diffDays < 7) {
+            return `${diffDays}d ago`;
+        } else {
+            return date.toLocaleDateString();
+        }
+    }
+    
+    async getGHLDashboardData(dealer, applications) {
+        try {
+            if (!dealer.ghlIntegrationEnabled) {
+                return { status: 'disabled' };
+            }
+            
+            // Get GHL-integrated applications
+            const ghlApps = applications.filter(app => app.ghlMarketingContactId);
+            
+            const ghlData = {
+                status: 'connected',
+                integratedApplications: ghlApps.length,
+                totalContacts: ghlApps.length,
+                recentContacts: [],
+                workflows: {
+                    triggered: 0,
+                    active: 0
+                },
+                opportunities: {
+                    total: ghlApps.filter(app => app.ghlOpportunityId).length,
+                    open: ghlApps.filter(app => app.status === 'processing').length,
+                    won: ghlApps.filter(app => app.status === 'funded').length,
+                    lost: ghlApps.filter(app => app.status === 'declined').length
+                }
+            };
+            
+            // Get recent GHL contacts (up to 5)
+            for (const app of ghlApps.slice(0, 5)) {
+                if (app.ghlMarketingContactId) {
+                    try {
+                        const contact = await ghlApiService.getContactById(app.ghlMarketingContactId);
+                        if (contact) {
+                            ghlData.recentContacts.push({
+                                id: contact.id,
+                                name: `${contact.firstName} ${contact.lastName}`.trim(),
+                                email: contact.email,
+                                phone: contact.phone,
+                                applicationId: app.id,
+                                createdAt: contact.dateAdded || app.createdAt,
+                                tags: contact.tags || []
+                            });
+                        }
+                    } catch (contactError) {
+                        logger.warn(`Failed to fetch GHL contact ${app.ghlMarketingContactId}:`, contactError);
+                    }
+                }
+            }
+            
+            return ghlData;
+            
+        } catch (error) {
+            logger.error(`Error fetching GHL dashboard data for dealer ${dealer.id}:`, error);
+            return {
+                status: 'error',
+                message: 'Failed to fetch GHL data'
+            };
+        }
+    }
+    
+    async getDealerPerformanceMetrics(dealer, timeframe = '30d') {
+        try {
+            const applications = await db.getDealerApplications(dealer.id, 500); // Get more for metrics
+            
+            const now = new Date();
+            let startDate;
+            
+            switch (timeframe) {
+                case '7d':
+                    startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                case '30d':
+                    startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    break;
+                case '90d':
+                    startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                    break;
+                default:
+                    startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            }
+            
+            const filteredApps = applications.filter(app => 
+                new Date(app.createdAt) >= startDate
+            );
+            
+            const metrics = {
+                period: timeframe,
+                startDate: startDate.toISOString(),
+                endDate: now.toISOString(),
+                ...this.calculateDealerStatistics(filteredApps),
+                trends: this.calculateTrends(applications, startDate),
+                topVehicles: this.getTopVehicles(filteredApps),
+                averageProcessingTime: this.calculateAverageProcessingTime(filteredApps)
+            };
+            
+            return metrics;
+            
+        } catch (error) {
+            logger.error(`Error calculating performance metrics for dealer ${dealer.id}:`, error);
+            throw new Error('Failed to calculate performance metrics');
+        }
+    }
+    
+    calculateTrends(applications, startDate) {
+        const now = new Date();
+        const midPoint = new Date((startDate.getTime() + now.getTime()) / 2);
+        
+        const firstHalf = applications.filter(app => {
+            const appDate = new Date(app.createdAt);
+            return appDate >= startDate && appDate < midPoint;
+        });
+        
+        const secondHalf = applications.filter(app => {
+            const appDate = new Date(app.createdAt);
+            return appDate >= midPoint && appDate <= now;
+        });
+        
+        const firstHalfStats = this.calculateDealerStatistics(firstHalf);
+        const secondHalfStats = this.calculateDealerStatistics(secondHalf);
+        
+        return {
+            applications: {
+                change: secondHalfStats.total - firstHalfStats.total,
+                percentChange: firstHalfStats.total > 0 ? 
+                    ((secondHalfStats.total - firstHalfStats.total) / firstHalfStats.total) * 100 : 0
+            },
+            approvalRate: {
+                change: secondHalfStats.approvalRate - firstHalfStats.approvalRate,
+                current: secondHalfStats.approvalRate,
+                previous: firstHalfStats.approvalRate
+            },
+            averageAmount: {
+                change: secondHalfStats.averageAmount - firstHalfStats.averageAmount,
+                percentChange: firstHalfStats.averageAmount > 0 ?
+                    ((secondHalfStats.averageAmount - firstHalfStats.averageAmount) / firstHalfStats.averageAmount) * 100 : 0
             }
         };
     }
-
-    maskSSN(ssn) {
-        if (!ssn) return null;
-        if (ssn.length >= 4) {
-            return 'XXX-XX-' + ssn.slice(-4);
-        }
-        return 'XXX-XX-XXXX';
-    }
-
-    formatDate(dateString) {
-        if (!dateString) return 'N/A';
+    
+    getTopVehicles(applications) {
+        const vehicleCounts = {};
         
+        applications.forEach(app => {
+            const vehicle = app.vehicleInfo || 'Unknown';
+            vehicleCounts[vehicle] = (vehicleCounts[vehicle] || 0) + 1;
+        });
+        
+        return Object.entries(vehicleCounts)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 5)
+            .map(([vehicle, count]) => ({ vehicle, count }));
+    }
+    
+    calculateAverageProcessingTime(applications) {
+        const processedApps = applications.filter(app => 
+            app.status !== 'submitted' && app.updatedAt
+        );
+        
+        if (processedApps.length === 0) return 0;
+        
+        const totalProcessingTime = processedApps.reduce((sum, app) => {
+            const created = new Date(app.createdAt);
+            const updated = new Date(app.updatedAt);
+            return sum + (updated - created);
+        }, 0);
+        
+        return Math.round(totalProcessingTime / (processedApps.length * 1000 * 60 * 60)); // Hours
+    }
+    
+    async getSystemHealth() {
         try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('en-US', {
-                month: 'numeric',
-                day: 'numeric',
-                year: 'numeric'
-            });
+            const stats = await db.getDatabaseStats();
+            const emailHealth = await require('./emailService').testConnection();
+            
+            return {
+                status: 'healthy',
+                services: {
+                    database: 'healthy',
+                    email: emailHealth ? 'healthy' : 'degraded',
+                    ghl: config.GHL_API_KEY ? 'configured' : 'not_configured'
+                },
+                statistics: stats,
+                timestamp: new Date().toISOString()
+            };
         } catch (error) {
-            return 'Invalid Date';
+            logger.error('Error getting system health:', error);
+            return {
+                status: 'unhealthy',
+                error: error.message,
+                timestamp: new Date().toISOString()
+            };
         }
     }
 }

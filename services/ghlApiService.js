@@ -2,7 +2,7 @@
 console.log('[DEBUG] Entering services/ghlApiService.js'); // ADD THIS
 const axios = require('axios');
 const config = require('../config'); 
-const logger = require('../utils/logger'); 
+const { logger } = require('../utils/logger'); 
 
 // This will store our processed map: { "html_form_field_name_or_logical_key": "GHL_Field_ID" }
 const processedFieldMap = {}; 

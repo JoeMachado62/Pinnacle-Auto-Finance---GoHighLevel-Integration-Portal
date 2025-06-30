@@ -1,251 +1,641 @@
-// /var/www/paf-ghl/routes/applicationRoutes.js
-console.log('[DEBUG] Entering routes/applicationRoutes.js');
+// routes/applicationRoutes.js - REFACTORED FOR NEW SYSTEM
 const express = require('express');
-console.log('[DEBUG] routes/applicationRoutes.js: Express loaded.');
 const router = express.Router();
-console.log('[DEBUG] routes/applicationRoutes.js: Router initialized.');
-
+const { authenticateToken, authenticatePremiumDealer, requirePermission, logSecurityEvent } = require('../middleware/auth');
+const authService = require('../services/authService');
+const emailService = require('../services/emailService');
+const db = require('../services/databaseService');
 const ghlApiService = require('../services/ghlApiService');
-console.log('[DEBUG] routes/applicationRoutes.js: ghlApiService loaded.');
+const { logger } = require('../utils/logger');
+const crypto = require('crypto');
 
-const logger = require('../utils/logger');
-console.log('[DEBUG] routes/applicationRoutes.js: Logger loaded.');
-
-const config = require('../config');
-console.log('[DEBUG] routes/applicationRoutes.js: Config loaded.');
-
-const authMiddleware = require('../middleware/auth');
-console.log('[DEBUG] routes/applicationRoutes.js: authMiddleware loaded.');
-
-console.log('[DEBUG] routes/applicationRoutes.js: About to define validateApplicationData function.');
-// --- Server-Side Validation Helper ---
-// THIS IS ILLUSTRATIVE. For 173 fields, use a schema validation library (e.g., Zod, Joi).
-function validateApplicationData(data) {
-    const errors = [];
-
-    // Helper to check for required fields
-    const checkRequired = (fieldName, readableName) => {
-        if (data[fieldName] === undefined || data[fieldName] === null || String(data[fieldName]).trim() === '') {
-            errors.push(`${readableName} is required.`);
-        }
-    };
-
-    // Helper for simple format checks (extend as needed)
-    const checkFormat = (fieldName, regex, readableName, formatDesc) => {
-        if (data[fieldName] && !regex.test(String(data[fieldName]))) {
-            errors.push(`Invalid format for ${readableName}. Expected ${formatDesc}.`);
-        }
-    };
-    
-    // --- Primary Borrower Essentials ---
-    // HTML form sends first/last name separately, not as borrower1_applicant
-    checkRequired('borrower1_firstName', 'Primary Applicant First Name');
-    checkRequired('borrower1_lastName', 'Primary Applicant Last Name');
-    checkRequired('borrower1_dob', 'Primary Applicant Date of Birth');
-    checkRequired('borrower1_ssn', 'Primary Applicant SSN');
-    checkFormat('borrower1_ssn', /^\d{9}$/, 'Primary Applicant SSN', '9 digits');
-    checkRequired('borrower1_drivers_license', 'Primary Applicant Driver\'s License');
-    checkRequired('borrower1_cellPhone', 'Primary Applicant Cell Phone');
-    checkRequired('borrower1_email', 'Primary Applicant Email');
-    
-    // Address Information
-    checkRequired('borrower1_current_address', 'Primary Applicant Current Address');
-    checkRequired('borrower1_current_address_years', 'Primary Applicant Current Address Years');
-    checkRequired('borrower1_current_address_months', 'Primary Applicant Current Address Months');
-    
-    // Employment Information
-    checkRequired('borrower1_current_employer', 'Primary Applicant Current Employer');
-    checkRequired('borrower1_title', 'Primary Applicant Job Title');
-    checkRequired('borrower1_employer_address', 'Primary Applicant Employer Address');
-    checkRequired('borrower1_income', 'Primary Applicant Income');
-    checkRequired('borrower1_employment_years', 'Primary Applicant Employment Years');
-    checkRequired('borrower1_employment_months', 'Primary Applicant Employment Months');
-
-    // --- Conditional Primary Borrower History ---
-    const b1CurrentYears = parseInt(data.borrower1_current_address_years, 10) || 0;
-    if (b1CurrentYears < 2) { // If less than 2 years at current address
-        checkRequired('borrower1_previous_address_1', 'Primary Applicant Previous Address 1');
-        checkRequired('borrower1_prev_address_1_years', 'Primary Applicant Previous Address 1 Years');
-        checkRequired('borrower1_prev_address_1_months', 'Primary Applicant Previous Address 1 Months');
-    }
-    
-    // Employment history validation
-    const b1EmploymentYears = parseInt(data.borrower1_employment_years, 10) || 0;
-    if (b1EmploymentYears < 2) { // If less than 2 years at current job
-        checkRequired('borrower1_previous_employer_1', 'Primary Applicant Previous Employer 1');
-        checkRequired('borrower1_prev_employer_1_title', 'Primary Applicant Previous Employer 1 Title');
-        checkRequired('borrower1_prev_employer_1_address', 'Primary Applicant Previous Employer 1 Address');
-        checkRequired('borrower1_prev_employment_1_years', 'Primary Applicant Previous Employment 1 Years');
-        checkRequired('borrower1_prev_employment_1_months', 'Primary Applicant Previous Employment 1 Months');
-    }
-
-    // --- Co-Borrower (if present) ---
-    // Check if co-borrower data is being submitted
-    if (data.borrower2_firstName || data.borrower2_lastName) {
-        checkRequired('borrower2_firstName', 'Co-Borrower First Name');
-        checkRequired('borrower2_lastName', 'Co-Borrower Last Name');
-        checkRequired('borrower2_dob', 'Co-Borrower Date of Birth');
-        checkRequired('borrower2_ssn', 'Co-Borrower SSN');
-        checkFormat('borrower2_ssn', /^\d{9}$/, 'Co-Borrower SSN', '9 digits');
-        checkRequired('borrower2_drivers_license', 'Co-Borrower Driver\'s License');
-        checkRequired('borrower2_cellPhone', 'Co-Borrower Cell Phone');
-        checkRequired('borrower2_email', 'Co-Borrower Email');
-        
-        // Co-Borrower Address Information
-        checkRequired('borrower2_current_address', 'Co-Borrower Current Address');
-        checkRequired('borrower2_current_address_years', 'Co-Borrower Current Address Years');
-        checkRequired('borrower2_current_address_months', 'Co-Borrower Current Address Months');
-        
-        // Co-Borrower Employment Information
-        checkRequired('borrower2_current_employer', 'Co-Borrower Current Employer');
-        checkRequired('borrower2_title', 'Co-Borrower Job Title');
-        checkRequired('borrower2_employer_address', 'Co-Borrower Employer Address');
-        checkRequired('borrower2_income', 'Co-Borrower Income');
-        checkRequired('borrower2_employment_years', 'Co-Borrower Employment Years');
-        checkRequired('borrower2_employment_months', 'Co-Borrower Employment Months');
-        
-        // Co-Borrower conditional history
-        const b2CurrentYears = parseInt(data.borrower2_current_address_years, 10) || 0;
-        if (b2CurrentYears < 2) {
-            checkRequired('borrower2_previous_address_1', 'Co-Borrower Previous Address 1');
-            checkRequired('borrower2_prev_address_1_years', 'Co-Borrower Previous Address 1 Years');
-            checkRequired('borrower2_prev_address_1_months', 'Co-Borrower Previous Address 1 Months');
-        }
-        
-        const b2EmploymentYears = parseInt(data.borrower2_employment_years, 10) || 0;
-        if (b2EmploymentYears < 2) {
-            checkRequired('borrower2_previous_employer_1', 'Co-Borrower Previous Employer 1');
-            checkRequired('borrower2_prev_employer_1_title', 'Co-Borrower Previous Employer 1 Title');
-            checkRequired('borrower2_prev_employer_1_address', 'Co-Borrower Previous Employer 1 Address');
-            checkRequired('borrower2_prev_employment_1_years', 'Co-Borrower Previous Employment 1 Years');
-            checkRequired('borrower2_prev_employment_1_months', 'Co-Borrower Previous Employment 1 Months');
-        }
-    }
-
-    // --- Vehicle Information ---
-    checkRequired('vehicle_year', 'Vehicle Year');
-    checkRequired('vehicle_make_model', 'Vehicle Make & Model');
-    checkRequired('vehicle_vin', 'Vehicle VIN');
-    checkRequired('vehicle_mileage', 'Vehicle Mileage');
-
-    // --- Terms Information ---
-    checkRequired('selling_price', 'Selling Price');
-    checkRequired('amountFinanced', 'Amount Financed'); // This field name is correct in HTML
-    const numericAmount = parseFloat(String(data.amountFinanced || '').replace(/[$,]/g, ''));
-    if (isNaN(numericAmount)) {
-        errors.push('Amount Financed must be a valid number.');
-    }
-    // ... more terms fields ...
-
-    // --- Dealer Section ---
-    checkRequired('dealer_name', 'Dealer Name');
-    checkRequired('dealer_telephone', 'Dealer Telephone');
-    checkRequired('dealer_contact', 'Dealer Contact Person');
-
-    // --- Dealer Attestation ---
-    if (!data.dealer_attestation || data.dealer_attestation === 'false' || data.dealer_attestation === false) {
-        errors.push('Dealer attestation is required.');
-    }
-    checkRequired('signature_date', 'Signature Date for Attestation');
-
-
-    if (errors.length > 0) {
-        return { isValid: false, errors };
-    }
-    return { isValid: true };
+// Utility functions
+function getClientIP(req) {
+    return req.headers['x-forwarded-for'] || 
+           req.connection.remoteAddress || 
+           req.socket.remoteAddress ||
+           'unknown';
 }
-console.log('[DEBUG] routes/applicationRoutes.js: validateApplicationData function defined.');
 
-console.log('[DEBUG] routes/applicationRoutes.js: About to define /submit route.');
-// POST /api/credit-application/submit - Requires authentication
-router.post('/submit', authMiddleware.authenticateToken, async (req, res) => {
-    const formData = req.body;
-    const dealer = req.user; // From auth middleware
-    
-    logger.info(`Received credit application submission from dealer: ${dealer.dealerName} (${dealer.username})`);
-    
-    // Automatically inject dealer information into the application
-    const enhancedFormData = {
-        ...formData,
-        // Override/ensure dealer fields are set from authenticated user
-        dealer_name: dealer.dealerName,
-        dealer_license_number: dealer.dealerLicenseNumber || dealer.finNumber,
-        dealer_contact: dealer.contactName,
-        dealer_email: dealer.email,
-        dealer_phone: dealer.phone,
-        dealer_address: dealer.address,
-        // Add dealer tracking fields for GHL
-        submitting_dealer_id: dealer.userId,
-        submitting_dealer_ghl_contact_id: dealer.ghlContactId,
-        submission_timestamp: new Date().toISOString()
+function extractMarketingData(formData) {
+    // Extract marketing-safe data for GHL (no sensitive financial info)
+    return {
+        firstName: formData.borrower1_firstName || '',
+        lastName: formData.borrower1_lastName || '',
+        email: formData.borrower1_email || '',
+        phone: formData.borrower1_cellPhone || '',
+        
+        // Vehicle information
+        vehicleYear: formData.vehicle_year || '',
+        vehicleMake: formData.vehicle_make_model ? formData.vehicle_make_model.split(' ')[0] : '',
+        vehicleModel: formData.vehicle_make_model || '',
+        vehicleMileage: formData.vehicle_mileage || '',
+        
+        // Basic demographics (no sensitive financial data)
+        residenceZip: formData.borrower1_address_zip || '',
+        residenceType: formData.borrower1_residence_type || '',
+        employer: formData.borrower1_current_employer || '',
+        employmentType: formData.borrower1_employment_type || '',
+        
+        // Deal context
+        amountFinanced: formData.amountFinanced || '',
+        downPayment: formData.total_down || formData.downPayment || '',
+        tradeValue: formData.trade_value || '0',
+        
+        // Source tracking
+        dealerSource: '', // Will be filled in with dealer info
+        applicationDate: new Date().toISOString()
     };
+}
 
-    // Avoid logging full formData in production if it contains too much PII
-    if (config.NODE_ENV === 'development') {
-        logger.debug('Enhanced formData with dealer info:', JSON.stringify(enhancedFormData, null, 2));
-    }
+function encryptSensitiveData(formData) {
+    // In production, implement proper AES encryption
+    // For now, just flag sensitive fields
+    const sensitiveFields = {
+        ssn: formData.borrower1_ssn,
+        driversLicense: formData.borrower1_drivers_license,
+        detailedIncome: formData.borrower1_gross_monthly_income,
+        bankInfo: formData.bank_information,
+        previousAddresses: formData.previous_addresses,
+        references: formData.personal_references
+    };
+    
+    // TODO: Implement actual encryption
+    return {
+        encryptedData: JSON.stringify(sensitiveFields),
+        encryptionKeyId: 'default',
+        encryptedAt: new Date().toISOString()
+    };
+}
 
-    const validationResult = validateApplicationData(enhancedFormData);
-    if (!validationResult.isValid) {
-        logger.warn(`Credit application validation failed for dealer ${dealer.dealerName}:`, { 
-            errors: validationResult.errors,
-            dealerName: dealer.dealerName,
-            dealerLicense: dealer.dealerLicenseNumber
-        });
-        return res.status(400).json({ 
-            message: 'Validation failed. Please check your input.',
-            errors: validationResult.errors 
-        });
-    }
+// ===== SUBMIT CREDIT APPLICATION =====
+router.post('/submit', 
+    authenticateToken,
+    requirePermission('submit_applications'),
+    logSecurityEvent('application_submit'),
+    async (req, res) => {
+        try {
+            const formData = req.body;
+            const dealer = req.user;
+            const clientIP = getClientIP(req);
 
-    try {
-        logger.info(`Creating GHL Contact for application from dealer: ${dealer.dealerName}`);
-        const contactId = await ghlApiService.createGhlContact(enhancedFormData);
-        logger.info(`GHL Contact created with ID: ${contactId} for dealer: ${dealer.dealerName}`);
+            // Validate required fields
+            const requiredFields = [
+                'borrower1_firstName',
+                'borrower1_lastName', 
+                'borrower1_email',
+                'borrower1_cellPhone',
+                'vehicle_year',
+                'vehicle_make_model',
+                'amountFinanced'
+            ];
 
-        logger.info(`Creating GHL Opportunity for contact ID: ${contactId}, dealer: ${dealer.dealerName}`);
-        const opportunityId = await ghlApiService.createGhlOpportunity(contactId, enhancedFormData);
-        logger.info(`GHL Opportunity created with ID: ${opportunityId} for dealer: ${dealer.dealerName}`);
-
-        logger.info(`Application submitted successfully - Dealer: ${dealer.dealerName}, Opportunity: ${opportunityId}, Contact: ${contactId}`);
-        
-        res.status(201).json({
-            message: 'Credit application submitted successfully!',
-            contactId: contactId,
-            opportunityId: opportunityId,
-            dealerName: dealer.dealerName
-        });
-
-    } catch (error) {
-        logger.error(`Error processing credit application for dealer ${dealer.dealerName}:`, { 
-            message: error.message,
-            dealerName: dealer.dealerName,
-            dealerLicense: dealer.dealerLicenseNumber
-        });
-        
-        // Check if it's a GHL API error re-thrown from the service
-        let clientErrorMessage = 'An error occurred while processing your application.';
-        let statusCode = 500;
-
-        if (error.message.includes("GHL Status")) {
-            clientErrorMessage = `Application processing error: ${error.message}`;
-            const match = error.message.match(/GHL Status: (\d+)/);
-            if (match && match[1]) {
-                statusCode = parseInt(match[1], 10);
-                if (statusCode < 400 || statusCode >= 500) statusCode = 500;
-                if (statusCode >= 400 && statusCode < 500) statusCode = 400;
+            const missingFields = requiredFields.filter(field => !formData[field]);
+            if (missingFields.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Missing required fields',
+                    missingFields: missingFields
+                });
             }
-        } else if (error.message.includes("Validation failed")) {
-            statusCode = 400;
-            clientErrorMessage = error.message;
-        }
-        
-        res.status(statusCode).json({ 
-            message: clientErrorMessage,
-            ...(config.NODE_ENV === 'development' && { errorDetails: error.toString() })
-        });
-    }
-});
 
-console.log('[DEBUG] Exiting routes/applicationRoutes.js - Router configured and exported.');
+            // Create application record
+            const applicationData = {
+                dealerId: dealer.id,
+                dealerName: dealer.dealerName,
+                dealerLicenseNumber: dealer.dealerLicenseNumber,
+                finNumber: dealer.finNumber,
+                
+                // Basic application info (unencrypted for dashboard display)
+                applicantName: `${formData.borrower1_firstName} ${formData.borrower1_lastName}`,
+                applicantEmail: formData.borrower1_email,
+                vehicleInfo: `${formData.vehicle_year} ${formData.vehicle_make_model}`,
+                amountFinanced: parseFloat(formData.amountFinanced) || 0,
+                downPayment: parseFloat(formData.total_down || formData.downPayment || 0),
+                
+                // Encrypted sensitive data
+                ...encryptSensitiveData(formData),
+                
+                // Status tracking
+                status: 'submitted',
+                dtStatus: 'pending',
+                submittedFrom: clientIP,
+                
+                // GHL integration fields (for premium dealers)
+                ghlMarketingContactId: null,
+                ghlOpportunityId: null
+            };
+
+            // Store application in database
+            const application = await db.createApplication(applicationData);
+
+            // Add initial conversation log
+            await db.addConversationNote(application.id, {
+                content: `Credit application submitted for ${application.applicantName}. Vehicle: ${application.vehicleInfo}, Amount: $${application.amountFinanced.toLocaleString()}`,
+                noteType: 'system_note',
+                createdBy: 'system',
+                createdByName: 'System',
+                importanceLevel: 'normal'
+            });
+
+            // Premium dealers: Create GHL marketing contact and opportunity
+            if (dealer.subscriptionTier === 'premium' && dealer.ghlIntegrationEnabled) {
+                try {
+                    const marketingData = extractMarketingData(formData);
+                    marketingData.dealerSource = dealer.dealerName;
+
+                    // Create GHL contact
+                    const ghlContact = await ghlApiService.createContact({
+                        ...marketingData,
+                        tags: [
+                            `dealer_${dealer.dealerName.replace(/\s+/g, '_')}`,
+                            'credit_application',
+                            'auto_finance_lead'
+                        ],
+                        source: `Credit Application - ${dealer.dealerName}`,
+                        customFields: {
+                            dealer_name: dealer.dealerName,
+                            application_id: application.id,
+                            subscription_tier: dealer.subscriptionTier
+                        }
+                    });
+
+                    if (ghlContact && ghlContact.id) {
+                        // Create GHL opportunity
+                        const ghlOpportunity = await ghlApiService.createOpportunity({
+                            contactId: ghlContact.id,
+                            name: `${application.applicantName} - ${application.vehicleInfo}`,
+                            monetaryValue: application.amountFinanced,
+                            status: 'open',
+                            source: dealer.dealerName,
+                            customFields: {
+                                vehicle_info: application.vehicleInfo,
+                                down_payment: application.downPayment,
+                                dealer_license: dealer.dealerLicenseNumber
+                            }
+                        });
+
+                        // Update application with GHL IDs
+                        await db.updateApplication(application.id, {
+                            ghlMarketingContactId: ghlContact.id,
+                            ghlOpportunityId: ghlOpportunity ? ghlOpportunity.id : null
+                        });
+
+                        // Add conversation note about GHL integration
+                        await db.addConversationNote(application.id, {
+                            content: `Marketing contact created in GHL CRM. Contact ID: ${ghlContact.id}`,
+                            noteType: 'system_note',
+                            createdBy: 'system',
+                            createdByName: 'GHL Integration'
+                        });
+
+                        logger.info(`GHL contact created for application ${application.id}: ${ghlContact.id}`);
+                    }
+                } catch (ghlError) {
+                    logger.error('GHL integration error:', ghlError);
+                    // Don't fail the application if GHL fails
+                    await db.addConversationNote(application.id, {
+                        content: `GHL integration warning: ${ghlError.message}`,
+                        noteType: 'system_note',
+                        createdBy: 'system',
+                        createdByName: 'GHL Integration',
+                        importanceLevel: 'high'
+                    });
+                }
+            }
+
+            // Send confirmation email to dealer
+            try {
+                await emailService.sendApplicationNotification(
+                    dealer.email,
+                    dealer.dealerName,
+                    {
+                        applicantName: application.applicantName,
+                        vehicleInfo: application.vehicleInfo,
+                        amountFinanced: application.amountFinanced,
+                        id: application.id,
+                        createdAt: application.createdAt
+                    },
+                    'Application received and is being processed. You will be notified of any status updates.'
+                );
+            } catch (emailError) {
+                logger.warn('Failed to send confirmation email:', emailError);
+                // Don't fail the application if email fails
+            }
+
+            logger.info(`Application submitted: ${application.id} by dealer: ${dealer.email}`);
+
+            res.status(201).json({
+                success: true,
+                message: 'Credit application submitted successfully',
+                application: {
+                    id: application.id,
+                    applicantName: application.applicantName,
+                    vehicleInfo: application.vehicleInfo,
+                    amountFinanced: application.amountFinanced,
+                    status: application.status,
+                    dtStatus: application.dtStatus,
+                    createdAt: application.createdAt,
+                    ghlIntegrated: dealer.subscriptionTier === 'premium' && !!application.ghlMarketingContactId
+                }
+            });
+
+        } catch (error) {
+            logger.error('Application submission error:', {
+                error: error.message,
+                dealerId: req.user ? req.user.id : null,
+                ip: getClientIP(req)
+            });
+
+            res.status(500).json({
+                success: false,
+                message: 'Failed to submit application. Please try again.',
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
+    }
+);
+
+// ===== GET DEALER APPLICATIONS =====
+router.get('/', 
+    authenticateToken,
+    requirePermission('view_own_applications'),
+    async (req, res) => {
+        try {
+            const dealer = req.user;
+            const { limit = 20, status, page = 1 } = req.query;
+
+            const applications = await db.getDealerApplications(
+                dealer.id, 
+                parseInt(limit), 
+                status
+            );
+
+            // Add conversation counts for each application
+            const applicationsWithCounts = await Promise.all(
+                applications.map(async (app) => {
+                    const conversations = await db.getConversationsByApplicationId(app.id);
+                    return {
+                        ...app,
+                        conversationCount: conversations.length,
+                        lastActivity: conversations.length > 0 ? 
+                            conversations[conversations.length - 1].timestamp : app.createdAt
+                    };
+                })
+            );
+
+            res.json({
+                success: true,
+                applications: applicationsWithCounts,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total: applications.length
+                },
+                dealer: {
+                    name: dealer.dealerName,
+                    tier: dealer.subscriptionTier
+                }
+            });
+
+        } catch (error) {
+            logger.error('Get applications error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch applications'
+            });
+        }
+    }
+);
+
+// ===== GET APPLICATION DETAILS (DEAL JACKET) =====
+router.get('/:applicationId', 
+    authenticateToken,
+    requirePermission('view_own_applications'),
+    async (req, res) => {
+        try {
+            const { applicationId } = req.params;
+            const dealer = req.user;
+
+            const application = await db.getApplicationById(applicationId);
+            if (!application) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Application not found'
+                });
+            }
+
+            // Verify dealer owns this application
+            if (application.dealerId !== dealer.id) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied to this application'
+                });
+            }
+
+            // Get conversation history
+            const conversations = await db.getConversationsByApplicationId(applicationId);
+
+            // Format for deal jacket display
+            const dealJacket = {
+                application: {
+                    id: application.id,
+                    applicantName: application.applicantName,
+                    applicantEmail: application.applicantEmail,
+                    vehicleInfo: application.vehicleInfo,
+                    amountFinanced: application.amountFinanced,
+                    downPayment: application.downPayment,
+                    status: application.status,
+                    dtStatus: application.dtStatus,
+                    dtReference: application.dtReferenceNumber,
+                    createdAt: application.createdAt,
+                    updatedAt: application.updatedAt
+                },
+                conversations: conversations.map(conv => ({
+                    id: conv.id,
+                    type: conv.noteType,
+                    content: conv.content,
+                    createdBy: conv.createdByName,
+                    timestamp: conv.timestamp,
+                    isSystem: conv.createdBy === 'system',
+                    importance: conv.importanceLevel
+                })),
+                dealer: {
+                    name: dealer.dealerName,
+                    tier: dealer.subscriptionTier
+                },
+                features: {
+                    canAddNotes: true,
+                    ghlIntegration: dealer.subscriptionTier === 'premium' && !!application.ghlMarketingContactId,
+                    dtIntegration: true
+                }
+            };
+
+            res.json({
+                success: true,
+                dealJacket: dealJacket
+            });
+
+        } catch (error) {
+            logger.error('Get application details error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch application details'
+            });
+        }
+    }
+);
+
+// ===== ADD CONVERSATION NOTE =====
+router.post('/:applicationId/conversations', 
+    authenticateToken,
+    requirePermission('add_conversation_notes'),
+    async (req, res) => {
+        try {
+            const { applicationId } = req.params;
+            const { content, notifyStakeholders = false } = req.body;
+            const dealer = req.user;
+
+            if (!content || content.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Note content is required'
+                });
+            }
+
+            const application = await db.getApplicationById(applicationId);
+            if (!application) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Application not found'
+                });
+            }
+
+            // Verify dealer owns this application
+            if (application.dealerId !== dealer.id) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied to this application'
+                });
+            }
+
+            // Add conversation note
+            const conversation = await db.addConversationNote(applicationId, {
+                content: content.trim(),
+                noteType: 'dealer_note',
+                createdBy: dealer.id,
+                createdByName: dealer.contactName,
+                createdByType: 'dealer',
+                importanceLevel: 'normal'
+            });
+
+            // If premium dealer and GHL integrated, sync note to GHL
+            if (dealer.subscriptionTier === 'premium' && application.ghlMarketingContactId) {
+                try {
+                    await ghlApiService.addContactNote(
+                        application.ghlMarketingContactId,
+                        `Dealer Note: ${content}`,
+                        'Pinnacle Portal'
+                    );
+                    
+                    // Mark as synced
+                    await db.updateApplication(applicationId, {
+                        ghlSynced: true
+                    });
+                } catch (ghlError) {
+                    logger.warn('Failed to sync note to GHL:', ghlError);
+                }
+            }
+
+            logger.info(`Conversation note added to application ${applicationId} by dealer ${dealer.email}`);
+
+            res.status(201).json({
+                success: true,
+                message: 'Note added successfully',
+                conversation: {
+                    id: conversation.id,
+                    content: conversation.content,
+                    createdBy: conversation.createdByName,
+                    timestamp: conversation.timestamp,
+                    type: conversation.noteType
+                }
+            });
+
+        } catch (error) {
+            logger.error('Add conversation note error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to add note'
+            });
+        }
+    }
+);
+
+// ===== GET APPLICATION STATUS =====
+router.get('/:applicationId/status', 
+    authenticateToken,
+    requirePermission('view_own_applications'),
+    async (req, res) => {
+        try {
+            const { applicationId } = req.params;
+            const dealer = req.user;
+
+            const application = await db.getApplicationById(applicationId);
+            if (!application || application.dealerId !== dealer.id) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Application not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                status: {
+                    applicationStatus: application.status,
+                    dtStatus: application.dtStatus,
+                    dtReference: application.dtReferenceNumber,
+                    lastUpdate: application.updatedAt,
+                    progress: {
+                        submitted: true,
+                        processing: application.dtStatus !== 'pending',
+                        decision: ['approved', 'declined', 'funded'].includes(application.dtStatus),
+                        completed: application.dtStatus === 'funded'
+                    }
+                }
+            });
+
+        } catch (error) {
+            logger.error('Get application status error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch application status'
+            });
+        }
+    }
+);
+
+// ===== PREMIUM FEATURE: TRIGGER GHL WORKFLOW =====
+router.post('/:applicationId/trigger-workflow', 
+    authenticatePremiumDealer,
+    async (req, res) => {
+        try {
+            const { applicationId } = req.params;
+            const { workflowType, data } = req.body;
+            const dealer = req.user;
+
+            const application = await db.getApplicationById(applicationId);
+            if (!application || application.dealerId !== dealer.id) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Application not found'
+                });
+            }
+
+            if (!application.ghlMarketingContactId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Application not integrated with GHL'
+                });
+            }
+
+            // Trigger GHL workflow
+            try {
+                await ghlApiService.triggerWorkflow(
+                    application.ghlMarketingContactId,
+                    workflowType,
+                    data
+                );
+
+                // Log the workflow trigger
+                await db.addConversationNote(applicationId, {
+                    content: `GHL workflow triggered: ${workflowType}`,
+                    noteType: 'system_note',
+                    createdBy: dealer.id,
+                    createdByName: dealer.contactName,
+                    createdByType: 'dealer'
+                });
+
+                res.json({
+                    success: true,
+                    message: 'Workflow triggered successfully'
+                });
+
+            } catch (ghlError) {
+                logger.error('GHL workflow trigger error:', ghlError);
+                res.status(500).json({
+                    success: false,
+                    message: 'Failed to trigger workflow'
+                });
+            }
+
+        } catch (error) {
+            logger.error('Trigger workflow error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to trigger workflow'
+            });
+        }
+    }
+);
+
+// ===== EXPORT APPLICATION DATA =====
+router.get('/:applicationId/export', 
+    authenticateToken,
+    requirePermission('view_own_applications'),
+    async (req, res) => {
+        try {
+            const { applicationId } = req.params;
+            const { format = 'json' } = req.query;
+            const dealer = req.user;
+
+            const application = await db.getApplicationById(applicationId);
+            if (!application || application.dealerId !== dealer.id) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Application not found'
+                });
+            }
+
+            const conversations = await db.getConversationsByApplicationId(applicationId);
+
+            const exportData = {
+                application: {
+                    id: application.id,
+                    applicantName: application.applicantName,
+                    vehicleInfo: application.vehicleInfo,
+                    amountFinanced: application.amountFinanced,
+                    status: application.status,
+                    dtStatus: application.dtStatus,
+                    createdAt: application.createdAt
+                },
+                conversations: conversations,
+                dealer: {
+                    name: dealer.dealerName,
+                    licenseNumber: dealer.dealerLicenseNumber
+                },
+                exportedAt: new Date().toISOString(),
+                exportedBy: dealer.contactName
+            };
+
+            if (format === 'json') {
+                res.setHeader('Content-Type', 'application/json');
+                res.setHeader('Content-Disposition', `attachment; filename="application-${applicationId}.json"`);
+                res.json(exportData);
+            } else {
+                res.status(400).json({
+                    success: false,
+                    message: 'Unsupported export format'
+                });
+            }
+
+        } catch (error) {
+            logger.error('Export application error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to export application data'
+            });
+        }
+    }
+);
+
 module.exports = router;

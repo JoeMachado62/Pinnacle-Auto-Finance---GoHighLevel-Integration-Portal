@@ -409,8 +409,11 @@
 
     <script>
         const API_BASE_URL = window.location.origin + '/api';
-        let authToken = localStorage.getItem('authToken');
+        let authToken = localStorage.getItem('pinnacle_auth_token');
         let userData = null;
+
+        // Debug logging for token issues
+        console.log('Dashboard: Auth token from storage:', authToken ? 'Present' : 'Missing');
 
         // Check authentication on page load
         function checkAuth() {
@@ -436,7 +439,7 @@
 
         async function loadUserProfile() {
             try {
-                const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+                const response = await fetch(`${API_BASE_URL}/dashboard/profile`, {
                     headers: {
                         'Authorization': `Bearer ${authToken}`
                     }
@@ -444,7 +447,7 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    userData = result.user;
+                    userData = result.profile.dealer;
                     document.getElementById('userName').textContent = userData.dealerName;
                 } else {
                     throw new Error('Failed to load profile');
@@ -456,74 +459,36 @@
         }
 
         async function loadFeaturedVehicles() {
-            try {
-                const response = await fetch(`${API_BASE_URL}/dashboard/featured-vehicles`);
-                const result = await response.json();
-
-                if (result.success && result.vehicles.length > 0) {
-                    const vehiclesHtml = result.vehicles.map(vehicle => `
-                        <div class="vehicle-card">
-                            <div class="vehicle-image">
-                                ${vehicle.image ? `<img src="${vehicle.image}" alt="${vehicle.title}" style="width:100%;height:100%;object-fit:cover;">` : 'No Image'}
-                            </div>
-                            <div class="vehicle-info">
-                                <div class="vehicle-badge">${vehicle.badge}</div>
-                                <div class="vehicle-title">${vehicle.title}</div>
-                                <div class="vehicle-price">${vehicle.price}</div>
-                                <div class="vehicle-details">${vehicle.details}</div>
-                            </div>
-                        </div>
-                    `).join('');
-                    
-                    document.getElementById('featuredVehicles').innerHTML = vehiclesHtml;
-                } else {
-                    document.getElementById('featuredVehicles').innerHTML = '<div style="text-align:center;color:#666;font-size:12px;">No featured vehicles</div>';
-                }
-            } catch (error) {
-                console.error('Featured vehicles load error:', error);
-                document.getElementById('featuredVehicles').innerHTML = '<div style="text-align:center;color:#666;font-size:12px;">Failed to load</div>';
-            }
+            // Placeholder content since this endpoint doesn't exist yet
+            const vehiclesHtml = `
+                <div style="text-align:center;color:#666;font-size:12px;padding:20px;">
+                    Featured vehicles coming soon!<br>
+                    <small>This feature will display available inventory.</small>
+                </div>
+            `;
+            document.getElementById('featuredVehicles').innerHTML = vehiclesHtml;
         }
 
         async function loadAccountManager() {
-            try {
-                const response = await fetch(`${API_BASE_URL}/dashboard/account-manager`, {
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`
-                    }
-                });
-                const result = await response.json();
-
-                if (result.success) {
-                    const manager = result.accountManager;
-                    const managerHtml = `
-                        <div class="account-manager">
-                            <div class="manager-photo">
-                                ${manager.photo ? `<img src="${manager.photo}" alt="${manager.name}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">` : 'Photo'}
-                            </div>
-                            <div class="manager-name">${manager.name}</div>
-                            <div class="manager-title">${manager.title}</div>
-                            <div class="manager-contact">
-                                📧 ${manager.email}<br>
-                                📞 ${manager.phone}<br>
-                                📍 ${manager.address}
-                            </div>
-                        </div>
-                    `;
-                    
-                    document.getElementById('accountManager').innerHTML = managerHtml;
-                } else {
-                    document.getElementById('accountManager').innerHTML = '<div style="text-align:center;color:#666;font-size:12px;">Manager info unavailable</div>';
-                }
-            } catch (error) {
-                console.error('Account manager load error:', error);
-                document.getElementById('accountManager').innerHTML = '<div style="text-align:center;color:#666;font-size:12px;">Failed to load</div>';
-            }
+            // Default account manager info
+            const managerHtml = `
+                <div class="account-manager">
+                    <div class="manager-photo">AM</div>
+                    <div class="manager-name">Support Team</div>
+                    <div class="manager-title">Account Manager</div>
+                    <div class="manager-contact">
+                        📧 support@pinnacleautofinance.com<br>
+                        📞 1-800-PINNACLE<br>
+                        📍 Available 24/7
+                    </div>
+                </div>
+            `;
+            document.getElementById('accountManager').innerHTML = managerHtml;
         }
 
         async function loadDeals() {
             try {
-                const response = await fetch(`${API_BASE_URL}/dashboard/deals`, {
+                const response = await fetch(`${API_BASE_URL}/dashboard/recent-applications`, {
                     headers: {
                         'Authorization': `Bearer ${authToken}`
                     }
@@ -532,42 +497,36 @@
                 if (response.ok) {
                     const result = await response.json();
                     
-                    if (result.success && result.deals.length > 0) {
+                    if (result.success && result.applications.length > 0) {
                         const dealsHtml = `
                             <table class="deals-table">
                                 <thead>
                                     <tr>
-                                        <th>Client Name</th>
-                                        <th>Start Date</th>
+                                        <th>Applicant Name</th>
+                                        <th>Vehicle</th>
+                                        <th>Amount</th>
                                         <th>Status</th>
-                                        <th>Next Action</th>
-                                        <th>VIN#</th>
-                                        <th>Loan#</th>
-                                        <th>Messages</th>
-                                        <th>Last Message Details</th>
+                                        <th>Submitted</th>
+                                        <th>Application ID</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${result.deals.map(deal => `
+                                    ${result.applications.map(app => `
                                         <tr>
                                             <td>
-                                                <span class="client-name" onclick="viewDeal('${deal.opportunityId}')">
-                                                    ${deal.clientName}
+                                                <span class="client-name" onclick="viewApplication('${app.id}')">
+                                                    ${app.applicantName}
                                                 </span>
                                             </td>
-                                            <td>${deal.startDate}</td>
+                                            <td>${app.vehicleInfo || 'N/A'}</td>
+                                            <td>$${app.amountFinanced ? Number(app.amountFinanced).toLocaleString() : 'N/A'}</td>
                                             <td>
-                                                <span class="status-badge ${getStatusClass(deal.status)}">
-                                                    ${deal.status}
+                                                <span class="status-badge ${getStatusClass(app.status)}">
+                                                    ${app.status}
                                                 </span>
                                             </td>
-                                            <td>${deal.nextAction}</td>
-                                            <td>${deal.vin}</td>
-                                            <td>${deal.loanNumber}</td>
-                                            <td>
-                                                ${deal.messageCount > 0 ? `<span class="message-count">${deal.messageCount}</span>` : '0'}
-                                            </td>
-                                            <td>${deal.lastMessage}</td>
+                                            <td>${app.timeAgo}</td>
+                                            <td>${app.id.substring(0, 8)}...</td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -578,18 +537,18 @@
                     } else {
                         document.getElementById('dealsTableContainer').innerHTML = `
                             <div class="no-deals">
-                                <h3>No deals submitted yet</h3>
+                                <h3>No applications submitted yet</h3>
                                 <p>Click "SUBMIT NEW DEAL" to get started</p>
                             </div>
                         `;
                     }
                 } else {
-                    throw new Error('Failed to load deals');
+                    throw new Error('Failed to load applications');
                 }
             } catch (error) {
-                console.error('Deals load error:', error);
-                showAlert('Failed to load deals. Please refresh the page.');
-                document.getElementById('dealsTableContainer').innerHTML = '<div class="no-deals">Failed to load deals</div>';
+                console.error('Applications load error:', error);
+                showAlert('Failed to load applications. Please refresh the page.');
+                document.getElementById('dealsTableContainer').innerHTML = '<div class="no-deals">Failed to load applications</div>';
             }
         }
 
@@ -606,13 +565,14 @@
             return statusMap[status] || 'status-new';
         }
 
-        function viewDeal(opportunityId) {
-            window.location.href = `/deal-jacket.html?id=${opportunityId}`;
+        function viewApplication(applicationId) {
+            window.location.href = `/application-details.html?id=${applicationId}`;
         }
 
         function logout() {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('userData');
+            console.log('Dashboard: Logging out - clearing tokens');
+            localStorage.removeItem('pinnacle_auth_token');
+            localStorage.removeItem('pinnacle_dealer_info');
             window.location.href = '/login.html';
         }
 
