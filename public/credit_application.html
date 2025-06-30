@@ -732,6 +732,14 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // AUTH CHECK:
+            const authToken = localStorage.getItem('pinnacle_auth_token');
+            if (!authToken) {
+                alert('Please log in to submit applications.');
+                window.location.href = '/login.html';
+                return;
+            }
+
 
             // --- Currency Formatting and Calculations ---
             const formatCurrency = (input) => {
@@ -1071,14 +1079,18 @@
 
                 console.log('Submitting FormData:', JSON.stringify(formDataObj, null, 2));
 
-                try {
-                    const response = await fetch('/api/credit-application/submit', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(formDataObj),
-                    });
+
+            try {
+                const response = await fetch('/api/applications/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('pinnacle_auth_token')}` 
+                    },
+                    body: JSON.stringify(formDataObj),
+                });
+
+
 
                     const result = await response.json();
 
@@ -1090,11 +1102,10 @@
                         alert(errorMessage);
                         console.error('Server Error:', result);
                     } else {
-                        alert(`Application submitted successfully!\nContact ID: ${result.contactId}\nOpportunity ID: ${result.opportunityId}`);
-                        creditAppForm.reset();
-                        if (coBorrowerVisible) removeCoBorrower();
-                        setupBorrowerListeners('borrower1Container'); 
-                        calculateTotals(); 
+                        alert(`Application submitted successfully!\nApplication ID: ${result.application.id}\nTracking: ${result.application.status}`);
+                        
+                        // Redirect back to dashboard with success indicator
+                        window.location.href = '/dashboard.html?submitted=true';
                     }
                 } catch (error) {
                     alert('An unexpected error occurred during submission. Please try again. Check console for details.');
