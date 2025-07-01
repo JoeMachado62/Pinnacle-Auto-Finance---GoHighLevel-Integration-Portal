@@ -36,7 +36,7 @@
       "subscriptionTier": "basic",
       "status": "active",
       "createdAt": "2025-06-30T12:03:39.121Z",
-      "lastLogin": "2025-06-30T18:24:42.956Z",
+      "lastLogin": "2025-07-01T01:40:01.555Z",
       "failedLoginAttempts": 0,
       "accountLockedUntil": null,
       "emailVerified": false,
@@ -87,5 +87,5 @@
       "ghlIntegrationEnabled": false
     }
   ],
-  "lastUpdated": "2025-06-30T18:24:42.956Z"
+  "lastUpdated": "2025-07-01T01:40:01.555Z"
 }

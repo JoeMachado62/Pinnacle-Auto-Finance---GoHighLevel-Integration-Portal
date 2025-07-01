@@ -4,8 +4,8 @@
   "description": "Pinnacle Auto Finance - Secure Dealer Portal with GoHighLevel Integration",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "NODE_ENV=production node server.js",
+    "dev": "NODE_ENV=development LOG_LEVEL=debug nodemon server.js",
     "test": "node test-authentication.js",
     "test:auth": "node test-authentication.js",
     "setup": "node scripts/setup.js",

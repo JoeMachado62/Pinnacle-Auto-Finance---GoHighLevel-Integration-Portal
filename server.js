@@ -1,5 +1,17 @@
-// server.js - REFACTORED PINNACLE AUTO FINANCE PORTAL
-// Version 2.0 - Complete authentication and security overhaul
+// server.js - REFACTORED PINNACLE AUTO FINANCE PORTAL WITH COMPREHENSIVE LOGGING
+// Version 2.0 - Complete authentication and security overhaul with enhanced debugging
+
+// FORCE CONSOLE LOGGING - Add this at the very top
+const originalLog = console.log;
+console.log = function(...args) {
+    originalLog(new Date().toISOString(), '|', ...args);
+};
+
+console.log('🔥 FORCED LOGGING ENABLED - SERVER STARTING');
+console.log('📍 Working directory:', process.cwd());
+console.log('🔧 Node version:', process.version);
+console.log('🔧 Command line:', process.argv.join(' '));
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -7,31 +19,58 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
+console.log('✅ All core modules imported successfully');
+
 // Load environment variables first
 require('dotenv').config();
+console.log('✅ Environment variables loaded');
 
 // Initialize configuration and logger
 const config = require('./config');
-const { logger, httpLoggingMiddleware, logBusiness, logSecurity } = require('./utils/logger');
+console.log('✅ Configuration loaded');
+
+const { logger, httpLoggingMiddleware, logBusiness, logSecurity, logDebug } = require('./utils/logger');
+console.log('✅ Logger initialized');
 
 // Services
+console.log('📦 Loading services...');
 const db = require('./services/databaseService');
+console.log('✅ Database service loaded');
 const emailService = require('./services/emailService');
+console.log('✅ Email service loaded');
 
 // Routes
+console.log('📡 Loading routes...');
 const applicationRoutes = require('./routes/applicationRoutes');
+console.log('✅ Application routes loaded');
 const authRoutes = require('./routes/authRoutes');
+console.log('✅ Auth routes loaded');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+console.log('✅ Dashboard routes loaded');
 
 // Initialize Express app
+console.log('🏗️ Initializing Express app...');
 const app = express();
+console.log('✅ Express app initialized');
+
+// Log startup information
+logger.info('🎯 SERVER STARTUP INITIATED', {
+    category: 'STARTUP',
+    workingDirectory: process.cwd(),
+    nodeVersion: process.version,
+    environment: process.env.NODE_ENV,
+    port: process.env.PORT || config.PORT
+});
 
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
+logDebug('EXPRESS', 'Trust proxy configured');
 
 // ===== SECURITY MIDDLEWARE =====
+logDebug('MIDDLEWARE', 'Setting up security middleware...');
 
 // Helmet for security headers
+logDebug('SECURITY', 'Configuring Helmet security headers');
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -45,8 +84,10 @@ app.use(helmet({
     },
     crossOriginEmbedderPolicy: false
 }));
+logDebug('SECURITY', '✅ Helmet configured successfully');
 
 // Rate limiting
+logDebug('SECURITY', 'Setting up rate limiting...');
 const limiter = rateLimit({
     windowMs: config.RATE_LIMIT_WINDOW_MS, // 15 minutes
     max: config.RATE_LIMIT_MAX_REQUESTS, // limit each IP to 100 requests per windowMs
@@ -70,9 +111,15 @@ const limiter = rateLimit({
         });
     }
 });
+logDebug('SECURITY', '✅ Rate limiter configured successfully');
 
 // Apply rate limiting to API routes, but exclude authenticated dashboard routes
+logDebug('SECURITY', 'Applying rate limiting to API routes...');
 app.use('/api', (req, res, next) => {
+    logDebug('RATE_LIMIT', `Checking rate limit for ${req.method} ${req.originalUrl}`, {
+        ip: req.ip,
+        path: req.path
+    });
     // Skip rate limiting for authenticated dashboard routes
     if (req.path.startsWith('/dashboard') || req.path.startsWith('/auth/profile')) {
         const authHeader = req.headers['authorization'];
@@ -85,6 +132,7 @@ app.use('/api', (req, res, next) => {
 });
 
 // Stricter rate limiting for auth endpoints
+logDebug('SECURITY', 'Setting up stricter rate limiting for auth endpoints...');
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 10, // limit each IP to 10 auth requests per windowMs
@@ -93,8 +141,10 @@ const authLimiter = rateLimit({
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/verify-2fa', authLimiter);
+logDebug('SECURITY', '✅ Auth rate limiters applied');
 
 // ===== CORS CONFIGURATION =====
+logDebug('SECURITY', 'Configuring CORS...');
 const corsOptions = {
     origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps or curl requests)
@@ -115,8 +165,10 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+logDebug('SECURITY', '✅ CORS configured successfully');
 
 // ===== BODY PARSING MIDDLEWARE =====
+logDebug('MIDDLEWARE', 'Setting up body parsing middleware...');
 app.use(express.json({ 
     limit: '10mb',
     verify: (req, res, buf) => {
@@ -125,18 +177,40 @@ app.use(express.json({
     }
 }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+logDebug('MIDDLEWARE', '✅ Body parsing middleware configured');
 
 // ===== LOGGING MIDDLEWARE =====
+logDebug('MIDDLEWARE', 'Setting up HTTP logging middleware...');
 app.use(httpLoggingMiddleware);
+logDebug('MIDDLEWARE', '✅ HTTP logging middleware configured');
 
 // ===== STATIC FILES =====
-app.use(express.static(path.join(__dirname, 'public'), {
+logDebug('STATIC_FILES', 'Configuring static file serving...');
+const staticPath = path.join(__dirname, 'public');
+logDebug('STATIC_FILES', `Static files directory: ${staticPath}`);
+
+app.use(express.static(staticPath, {
     maxAge: config.NODE_ENV === 'production' ? '1d' : '0',
     etag: true,
     lastModified: true
 }));
 
+// Add middleware to log static file requests
+app.use((req, res, next) => {
+    if (req.url.includes('.html') || req.url.includes('.css') || req.url.includes('.js')) {
+        logDebug('STATIC_FILES', `Serving static file: ${req.url}`, {
+            method: req.method,
+            path: req.url,
+            ip: req.ip
+        });
+    }
+    next();
+});
+
+logDebug('STATIC_FILES', '✅ Static file serving configured');
+
 // ===== API HEALTH CHECK =====
+logDebug('ROUTES', 'Setting up health check endpoint...');
 app.get('/api/health', async (req, res) => {
     try {
         const health = {
@@ -180,20 +254,43 @@ app.get('/api/health', async (req, res) => {
 });
 
 // ===== ROOT ROUTE =====
+logDebug('ROUTES', 'Setting up root route...');
 app.get('/', (req, res) => {
+    logDebug('ROOT_ROUTE', 'Root route accessed', {
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+        hasAuth: !!req.headers['authorization']
+    });
+    
     // Check if user is already logged in
     const authHeader = req.headers['authorization'];
     if (authHeader) {
+        logDebug('ROOT_ROUTE', 'User has auth header, redirecting to dashboard');
         res.redirect('/dashboard.html');
     } else {
+        logDebug('ROOT_ROUTE', 'No auth header, redirecting to login');
         res.redirect('/login.html');
     }
 });
 
 // ===== API ROUTES =====
+logDebug('ROUTES', 'Mounting API routes...');
+logDebug('ROUTES', 'Mounting /api/auth routes...');
 app.use('/api/auth', authRoutes);
-app.use('/api/applications', applicationRoutes);
+logDebug('ROUTES', '✅ Auth routes mounted');
+
+logDebug('ROUTES', 'Mounting /api/applications routes...');
+app.use('/api/applications', applicationRoutes); // Fix: Mount at /api/applications
+logDebug('ROUTES', '✅ Application routes mounted');
+
+logDebug('ROUTES', 'Mounting /api/dashboard routes...');
 app.use('/api/dashboard', dashboardRoutes);
+logDebug('ROUTES', '✅ Dashboard routes mounted');
+
+// Also mount legacy route for backward compatibility
+logDebug('ROUTES', 'Mounting legacy /api/credit-application routes...');
+app.use('/api/credit-application', applicationRoutes);
+logDebug('ROUTES', '✅ Legacy application routes mounted');
 
 // ===== WEBHOOK ENDPOINTS (for future DealerTrack integration) =====
 app.post('/api/webhooks/dealertrack', express.raw({ type: 'application/json' }), (req, res) => {
@@ -233,20 +330,32 @@ app.use('/api/*', (req, res) => {
 });
 
 // ===== CATCH-ALL FOR SPA ROUTING =====
+// This is a fallback for any route that doesn't match an API endpoint or a static file.
+// It's useful for single-page applications, but in our case, we want to serve specific HTML files.
 app.get('*', (req, res) => {
-    // For SPA routes, serve the appropriate HTML file
     const requestedPath = req.path;
-    
-    if (requestedPath.includes('.')) {
-        // If it looks like a file request, return 404
-        return res.status(404).json({
-            success: false,
-            message: 'File not found'
-        });
+
+    // Define a list of valid HTML pages
+    const validPages = [
+        '/login.html',
+        '/dashboard.html',
+        '/credit_application.html',
+        '/application-details.html',
+        '/register.html'
+    ];
+
+    // If the requested path is a valid page, serve it
+    if (validPages.includes(requestedPath)) {
+        res.sendFile(path.join(__dirname, 'public', requestedPath));
+    } 
+    // If the path looks like a file but wasn't found by express.static, return 404
+    else if (requestedPath.includes('.')) {
+        res.status(404).json({ success: false, message: 'File not found' });
+    } 
+    // For any other route, redirect to the login page
+    else {
+        res.redirect('/login.html');
     }
-    
-    // Default to login page for unknown routes
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 // ===== GLOBAL ERROR HANDLER =====
@@ -353,14 +462,26 @@ process.on('uncaughtException', (error) => {
 });
 
 // ===== START SERVER =====
+logDebug('SERVER', 'Starting server...');
 const server = app.listen(config.PORT, '0.0.0.0', async () => {
+    logger.info('🎉 SERVER SUCCESSFULLY STARTED', {
+        category: 'STARTUP',
+        port: config.PORT,
+        host: '0.0.0.0',
+        environment: config.NODE_ENV
+    });
+    
     // Initialize services
     try {
+        logDebug('SERVICES', 'Initializing services...');
+        
         // Test database connection
+        logDebug('DATABASE', 'Testing database connection...');
         await db.getDatabaseStats();
         logger.info('✅ Database service initialized');
         
         // Test email service
+        logDebug('EMAIL', 'Testing email service connection...');
         const emailHealthy = await emailService.testConnection();
         logger.info(`✅ Email service initialized (${config.EMAIL_TEST_MODE ? 'TEST MODE' : 'PRODUCTION'})`);
         

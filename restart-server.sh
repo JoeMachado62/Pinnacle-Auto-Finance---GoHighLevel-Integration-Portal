@@ -308,6 +308,7 @@ start_development_server() {
     log "Starting development server..."
     
     export NODE_ENV=development
+    export LOG_LEVEL=debug
     
     # Check if nodemon is available
     if command -v nodemon >/dev/null 2>&1; then

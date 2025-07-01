@@ -16,7 +16,24 @@
       "createdAt": "2025-06-30T11:21:34.766Z",
       "status": "submitted",
       "dtStatus": "pending"
+    },
+    {
+      "dealerId": "ee56c306-cc40-4dd9-8e86-ef11b313455a",
+      "applicantName": "John Smith",
+      "vehicleInfo": "2024 Toyota Camry",
+      "amountFinanced": 28000,
+      "applicantData": {
+        "borrower1_firstName": "John",
+        "borrower1_lastName": "Smith",
+        "borrower1_email": "john.smith@example.com",
+        "vehicle_year": "2024",
+        "vehicle_make_model": "Toyota Camry"
+      },
+      "id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+      "createdAt": "2025-07-01T10:00:00.000Z",
+      "status": "New Deal Submitted",
+      "dtStatus": "pending"
     }
   ],
-  "lastUpdated": "2025-06-30T11:21:34.766Z"
+  "lastUpdated": "2025-07-01T10:00:00.000Z"
 }

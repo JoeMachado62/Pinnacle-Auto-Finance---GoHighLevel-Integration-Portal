@@ -414,7 +414,7 @@
     </div>
 
     <script>
-        const API_BASE_URL = window.location.origin + '/api';
+        const API_BASE_URL = window.location.protocol + '//' + window.location.hostname + ':3000/api';
         let authToken = localStorage.getItem('pinnacle_auth_token');
         let userData = null;
 
@@ -579,6 +579,8 @@
             console.log('Dashboard: Logging out - clearing tokens');
             localStorage.removeItem('pinnacle_auth_token');
             localStorage.removeItem('pinnacle_dealer_info');
+            // Also clear session storage just in case
+            sessionStorage.clear();
             window.location.href = '/login.html';
         }
 
