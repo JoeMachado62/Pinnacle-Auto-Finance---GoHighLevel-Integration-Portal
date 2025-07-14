@@ -370,7 +370,7 @@
 
     <script>
         const API_BASE_URL = window.location.origin + '/api';
-        let authToken = localStorage.getItem('authToken');
+        let authToken = localStorage.getItem('pinnacle_auth_token');
         let dealId = new URLSearchParams(window.location.search).get('id');
 
         function checkAuth() {
@@ -379,6 +379,15 @@
                 return false;
             }
             return true;
+        }
+
+        function viewApplicationDetails() {
+            if (dealId) {
+                window.location.href = `/credit_application.html?id=${dealId}`;
+            } else {
+                console.error('No deal ID available');
+                alert('Unable to load application details');
+            }
         }
 
         function showAlert(message, type = 'error') {
@@ -469,7 +478,7 @@
                         <span class="status-badge ${getStatusClass(deal.status)}">
                             ${deal.status}
                         </span>
-                        <button class="nav-btn" onclick="window.location.href='/credit_application.html'">
+                        <button class="nav-btn" onclick="viewApplicationDetails()">
                             View Details
                         </button>
                     </div>
@@ -691,7 +700,7 @@
             }
 
             try {
-                const response = await fetch(`${API_BASE_URL}/dashboard/deal/${dealId}`, {
+                const response = await fetch(`${API_BASE_URL}/applications/${dealId}`, {
                     headers: {
                         'Authorization': `Bearer ${authToken}`
                     }
@@ -718,8 +727,10 @@
         }
 
         function logout() {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('userData');
+            console.log('Deal Jacket: Logging out');
+            localStorage.removeItem('pinnacle_auth_token');
+            localStorage.removeItem('pinnacle_dealer_info');
+            sessionStorage.clear();
             window.location.href = '/login.html';
         }
 

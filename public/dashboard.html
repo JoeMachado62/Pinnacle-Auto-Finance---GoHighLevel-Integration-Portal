@@ -414,7 +414,12 @@
     </div>
 
     <script>
-        const API_BASE_URL = window.location.protocol + '//' + window.location.hostname + ':3000/api';
+        // Debug helper
+        window.addEventListener('error', function(event) {
+            console.error('JavaScript error:', event.error, 'at line:', event.lineno);
+        });
+
+        const API_BASE_URL = '/api';
         let authToken = localStorage.getItem('pinnacle_auth_token');
         let userData = null;
 
@@ -443,8 +448,11 @@
             document.getElementById('alertContainer').innerHTML = '';
         }
 
+                // In dashboard.html, find the loadUserProfile function:
+
         async function loadUserProfile() {
             try {
+                console.log('Loading user profile...');
                 const response = await fetch(`${API_BASE_URL}/dashboard/profile`, {
                     headers: {
                         'Authorization': `Bearer ${authToken}`
@@ -453,14 +461,34 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    userData = result.profile.dealer;
-                    document.getElementById('userName').textContent = userData.dealerName;
+                    console.log('Profile response:', result); // Debug log
+                    
+                    // The API returns: { success: true, profile: { dealer: {...}, features: {...} } }
+                    // So we need to access result.profile.dealer correctly
+                    if (result && result.success && result.profile && result.profile.dealer) {
+                        userData = result.profile.dealer;
+                        document.getElementById('userName').textContent = userData.dealerName || 'Dealer';
+                        console.log('Profile loaded successfully:', userData.dealerName);
+                    } else {
+                        console.error('Unexpected profile response structure:', result);
+                        throw new Error('Invalid profile data structure');
+                    }
                 } else {
-                    throw new Error('Failed to load profile');
+                    console.error('Profile request failed with status:', response.status);
+                    throw new Error(`Failed to load profile: ${response.status}`);
                 }
             } catch (error) {
                 console.error('Profile load error:', error);
-                logout();
+                console.error('Error details:', error.message);
+                
+                // Only logout if it's an authentication error
+                if (error.message.includes('401') || error.message.includes('403')) {
+                    console.log('Authentication error - logging out');
+                    logout();
+                } else {
+                    // For other errors, show an alert but don't logout
+                    showAlert('Failed to load profile. Please refresh the page.');
+                }
             }
         }
 
@@ -572,29 +600,38 @@
         }
 
         function viewApplication(applicationId) {
-            window.location.href = `/application-details.html?id=${applicationId}`;
+            window.location.href = `/deal-jacket.html?id=${applicationId}`;
         }
 
         function logout() {
-            console.log('Dashboard: Logging out - clearing tokens');
-            localStorage.removeItem('pinnacle_auth_token');
-            localStorage.removeItem('pinnacle_dealer_info');
-            // Also clear session storage just in case
-            sessionStorage.clear();
-            window.location.href = '/login.html';
+            try {
+                console.log('Logout clicked');
+                localStorage.removeItem('pinnacle_auth_token');
+                localStorage.removeItem('pinnacle_dealer_info');
+                sessionStorage.clear();
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                window.location.href = '/login.html';
+            }
         }
 
         function goToSubmitApplication() {
-            const authToken = localStorage.getItem('pinnacle_auth_token');
-            
-            if (!authToken) {
-                alert('Authentication required. Please log in again.');
-                window.location.href = '/login.html';
-                return;
+            try {
+                console.log('Submit new deal clicked');
+                const authToken = localStorage.getItem('pinnacle_auth_token');
+                
+                if (!authToken) {
+                    alert('Please log in again.');
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                window.location.href = '/credit_application.html';
+            } catch (error) {
+                console.error('Error in goToSubmitApplication:', error);
+                alert('An error occurred. Check console.');
             }
-            
-            // Navigate to credit application
-            window.location.href = '/credit_application.html';
         }
 
         function refreshDashboard() {

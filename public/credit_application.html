@@ -122,7 +122,39 @@
         .submit-btn:hover, .add-borrower-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 8px rgba(0,0,0,0.15); }
         .remove-borrower-btn { background: linear-gradient(to right, #d65d5d, #c4506e); color: white; padding: 12px 30px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .remove-borrower-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 8px rgba(0,0,0,0.15); }
-        .error-message { color: #dc3545; font-size: 0.8em; margin-top: 4px; }
+        .error-message { 
+            color: #dc3545; 
+            font-size: 0.8em; 
+            margin-top: 4px; 
+            background-color: rgba(220, 53, 69, 0.1); 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            border-left: 3px solid #dc3545; 
+            display: block; 
+            animation: fadeIn 0.3s ease-in; 
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .invalid-input { 
+            border-color: #dc3545 !important; 
+            background-color: rgba(220, 53, 69, 0.05) !important; 
+            animation: shake 0.3s ease-in-out; 
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        .field-success {
+            border-color: #28a745 !important;
+            background-color: rgba(40, 167, 69, 0.05) !important;
+        }
         .footer { margin-top: 40px; text-align: center; font-size: 12px; color: var(--light-text); padding: 15px; border-top: 1px solid var(--border-color); }
         .borrower-container { position: relative; margin-bottom: 30px; }
         .borrower-header { background: linear-gradient(to right, var(--primary-blue), var(--primary-purple)); color: white; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; font-weight: 500;}
@@ -740,6 +772,177 @@
                 return;
             }
 
+            // AUTO-POPULATE DEALER INFORMATION AND CHECK FOR EXISTING APPLICATION
+            // Wait for DOM to be fully ready before auto-populating
+            setTimeout(() => {
+                autopopulateDealerInfo();
+                checkForExistingApplication();
+            }, 100);
+            
+            async function autopopulateDealerInfo() {
+                // First try to get from localStorage
+                const dealerInfoStr = localStorage.getItem('pinnacle_dealer_info');
+                
+                if (dealerInfoStr) {
+                    try {
+                        const dealerInfo = JSON.parse(dealerInfoStr);
+                        populateDealerFields(dealerInfo);
+                    } catch (error) {
+                        console.error('Error parsing stored dealer info:', error);
+                        // Try fetching fresh data
+                        await fetchAndPopulateDealerInfo();
+                    }
+                } else {
+                    // No stored info, fetch from API
+                    await fetchAndPopulateDealerInfo();
+                }
+            }
+            
+            async function fetchAndPopulateDealerInfo() {
+                try {
+                    const response = await fetch('/api/dashboard/profile', {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success && result.profile && result.profile.dealer) {
+                            const dealerInfo = result.profile.dealer;
+                            // Update localStorage with fresh data
+                            localStorage.setItem('pinnacle_dealer_info', JSON.stringify(dealerInfo));
+                            populateDealerFields(dealerInfo);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching dealer profile:', error);
+                    // Fields remain editable if fetch fails
+                }
+            }
+            
+            function populateDealerFields(dealerInfo) {
+                // Auto-fill the dealer fields
+                const dealerNameField = document.getElementById('dealerName');
+                const telephoneField = document.getElementById('telephone');
+                const contactField = document.getElementById('contact');
+                
+                if (dealerNameField && dealerInfo.dealerName) {
+                    dealerNameField.value = dealerInfo.dealerName;
+                    dealerNameField.readOnly = true; // Make it read-only since it's auto-populated
+                }
+                
+                if (telephoneField && dealerInfo.phone) {
+                    telephoneField.value = dealerInfo.phone;
+                    telephoneField.readOnly = true;
+                }
+                
+                if (contactField && dealerInfo.contactName) {
+                    contactField.value = dealerInfo.contactName;
+                    contactField.readOnly = true;
+                }
+                
+                // Add visual indicator that fields are auto-populated
+                const dealerFields = [dealerNameField, telephoneField, contactField];
+                dealerFields.forEach(field => {
+                    if (field && field.value) {
+                        field.style.backgroundColor = '#f3f4f6';
+                        field.style.border = '1px solid #d1d5db';
+                        field.title = 'Auto-populated from your dealer profile';
+                    }
+                });
+                
+                // Optional: Show a small notice
+                const firstField = document.querySelector('.form-section');
+                if (firstField && dealerNameField && dealerNameField.value) {
+                    const notice = document.createElement('div');
+                    notice.style.cssText = 'background: #eff6ff; border: 1px solid #3b82f6; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-size: 14px; color: #1e40af;';
+                    notice.innerHTML = '✓ Dealer information auto-populated from your profile';
+                    firstField.insertBefore(notice, firstField.firstChild);
+                    
+                    // Remove notice after 5 seconds
+                    setTimeout(() => notice.remove(), 5000);
+                }
+                
+                // Auto-populate complete
+            }
+
+            // Check if we're viewing an existing application
+            async function checkForExistingApplication() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const applicationId = urlParams.get('id') || urlParams.get('applicationId');
+                
+                if (applicationId) {
+                    try {
+                        const response = await fetch(`/api/applications/${applicationId}/form-data`, {
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            if (result.success && result.formData) {
+                                populateFormWithData(result.formData, result.applicationInfo);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading existing application:', error);
+                    }
+                }
+            }
+            
+            function populateFormWithData(formData, appInfo) {
+                console.log('Loading existing application data:', appInfo.id);
+                
+                // Show banner indicating this is existing application
+                const firstSection = document.querySelector('.form-section');
+                if (firstSection) {
+                    const banner = document.createElement('div');
+                    banner.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; color: #92400e;';
+                    banner.innerHTML = `📋 Viewing Application ${appInfo.id} (${appInfo.status}) - Submitted: ${new Date(appInfo.createdAt).toLocaleString()}`;
+                    firstSection.insertBefore(banner, firstSection.firstChild);
+                }
+                
+                // Populate all form fields
+                Object.keys(formData).forEach(fieldName => {
+                    const field = document.querySelector(`[name="${fieldName}"]`);
+                    if (field) {
+                        if (field.type === 'radio') {
+                            if (field.value === formData[fieldName]) {
+                                field.checked = true;
+                            }
+                        } else if (field.type === 'checkbox') {
+                            field.checked = formData[fieldName];
+                        } else {
+                            field.value = formData[fieldName];
+                        }
+                    }
+                });
+                
+                // Trigger calculations to update computed fields
+                if (typeof calculateTotals === 'function') {
+                    calculateTotals();
+                }
+                
+                // If application is not in editable state, make form read-only
+                if (appInfo.isReadOnly) {
+                    document.querySelectorAll('input, select, textarea').forEach(field => {
+                        if (!field.readOnly && !field.classList.contains('dealer-info')) {
+                            field.readOnly = true;
+                            field.style.backgroundColor = '#f9fafb';
+                        }
+                    });
+                    
+                    // Hide submit button
+                    const submitBtn = document.querySelector('.submit-application-btn');
+                    if (submitBtn) {
+                        submitBtn.style.display = 'none';
+                    }
+                }
+                
+                console.log('✅ Application data loaded successfully');
+            }
 
             // --- Currency Formatting and Calculations ---
             const formatCurrency = (input) => {
@@ -750,18 +953,158 @@
                 
                 if (value === '.' || value === '') { // Handle empty or just dot
                     input.value = '';
+                    clearFieldError(input);
                     return;
                 }
                 const num = parseFloat(value);
                 if (!isNaN(num)) {
                     input.value = '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    clearFieldError(input, true);
                 } else {
                     input.value = '';
+                    showFieldError(input, 'Please enter a valid currency amount');
                 }
+            };
+
+            // Phone number formatting and validation
+            const formatPhoneNumber = (input) => {
+                let value = input.value.replace(/\D/g, ''); // Remove all non-digits
+                
+                // Check for invalid characters in original input
+                if (input.value.replace(/[\d\s\-\(\)]/g, '').length > 0) {
+                    showFieldError(input, 'Phone number can only contain digits, spaces, dashes, and parentheses');
+                    input.classList.add('invalid-input');
+                    return;
+                }
+                
+                // Validate length
+                if (value.length > 10) {
+                    value = value.substring(0, 10);
+                }
+                
+                if (value.length === 0) {
+                    input.value = '';
+                    clearFieldError(input);
+                    return;
+                }
+                
+                // Format as XXX-XXX-XXXX
+                if (value.length <= 3) {
+                    input.value = value;
+                } else if (value.length <= 6) {
+                    input.value = value.substring(0, 3) + '-' + value.substring(3);
+                } else {
+                    input.value = value.substring(0, 3) + '-' + value.substring(3, 6) + '-' + value.substring(6);
+                }
+                
+                // Validate complete phone number
+                if (value.length === 10) {
+                    clearFieldError(input, true);
+                } else if (value.length > 0) {
+                    showFieldError(input, 'Please enter a complete 10-digit phone number');
+                }
+            };
+
+            // SSN formatting and validation
+            const formatSSN = (input) => {
+                let value = input.value.replace(/\D/g, ''); // Remove all non-digits
+                
+                // Check for invalid characters in original input
+                if (input.value.replace(/[\d\s\-]/g, '').length > 0) {
+                    showFieldError(input, 'SSN can only contain digits, spaces, and dashes');
+                    input.classList.add('invalid-input');
+                    return;
+                }
+                
+                // Validate length
+                if (value.length > 9) {
+                    value = value.substring(0, 9);
+                }
+                
+                if (value.length === 0) {
+                    input.value = '';
+                    clearFieldError(input);
+                    return;
+                }
+                
+                // Format as XXX-XX-XXXX
+                if (value.length <= 3) {
+                    input.value = value;
+                } else if (value.length <= 5) {
+                    input.value = value.substring(0, 3) + '-' + value.substring(3);
+                } else {
+                    input.value = value.substring(0, 3) + '-' + value.substring(3, 5) + '-' + value.substring(5);
+                }
+                
+                // Validate complete SSN
+                if (value.length === 9) {
+                    clearFieldError(input, true);
+                } else if (value.length > 0) {
+                    showFieldError(input, 'Please enter a complete 9-digit SSN');
+                }
+            };
+
+            // Error handling functions
+            const showFieldError = (input, message) => {
+                input.classList.add('invalid-input');
+                
+                // Remove existing error message
+                const existingError = input.parentNode.querySelector('.error-message');
+                if (existingError) {
+                    existingError.remove();
+                }
+                
+                // Add new error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = message;
+                input.parentNode.appendChild(errorDiv);
+            };
+
+            const clearFieldError = (input, showSuccess = false) => {
+                input.classList.remove('invalid-input');
+                const errorMessage = input.parentNode.querySelector('.error-message');
+                if (errorMessage) {
+                    errorMessage.remove();
+                }
+                
+                // Add success styling if validation passed and field has content
+                if (showSuccess && input.value.trim()) {
+                    input.classList.add('field-success');
+                } else {
+                    input.classList.remove('field-success');
+                }
+            };
+
+            // Address validation function
+            const validateAddress = async (input) => {
+                const address = input.value.trim();
+                if (!address) {
+                    clearFieldError(input);
+                    return;
+                }
+                
+                // Basic format validation
+                const addressPattern = /^\d+\s+[A-Za-z0-9\s,.'#-]+$/;
+                if (!addressPattern.test(address)) {
+                    showFieldError(input, 'Please enter a valid address format (e.g., 123 Main St, City, State 12345)');
+                    return;
+                }
+                
+                // Check for minimum required components
+                const components = address.split(',');
+                if (components.length < 2) {
+                    showFieldError(input, 'Please include city and state in the address');
+                    return;
+                }
+                
+                clearFieldError(input, true);
             };
 
             const parseCurrency = (value) => parseFloat(String(value || '0').replace(/[$,]/g, '')) || 0;
             const parsePercentage = (value) => parseFloat(String(value || '0').replace(/[%]/g, '')) / 100 || 0;
+
+            // Note: Form validation is handled in the submit event listener below
 
             const calculateTotals = () => {
                 const getVal = (id) => parseCurrency(document.getElementById(id)?.value);
@@ -806,15 +1149,47 @@
                 calculateTotals();
             };
             
+            // Currency input formatting with all event listeners combined
             document.querySelectorAll('.currency-input').forEach(input => {
                 input.addEventListener('blur', function() { formatCurrency(this); calculateTotals(); });
                 input.addEventListener('focus', function() { this.value = String(this.value).replace(/[$,]/g, ''); });
+                input.addEventListener('input', function() {
+                    // Remove any non-digit or decimal characters while typing
+                    let value = this.value.replace(/[^\d.]/g, '');
+                    const parts = value.split('.');
+                    if (parts.length > 2) {
+                        value = parts[0] + '.' + parts.slice(1).join('');
+                    }
+                    if (parts.length > 1) {
+                        value = parts[0] + '.' + parts[1].slice(0, 2);
+                    }
+                    this.value = value;
+                });
             });
+
+            // Tax rate input formatting
             const taxRateInput = document.getElementById('taxRate');
             if (taxRateInput) {
                 taxRateInput.addEventListener('blur', function() { formatTaxRate(this); });
                 taxRateInput.addEventListener('focus', function() { this.value = this.value.replace(/%/g, ''); });
             }
+
+            // Phone number formatting
+            document.querySelectorAll('input[type="tel"]').forEach(input => {
+                input.addEventListener('input', function() { formatPhoneNumber(this); });
+                input.addEventListener('blur', function() { formatPhoneNumber(this); });
+            });
+
+            // SSN formatting
+            document.querySelectorAll('input[name*="ssn"]').forEach(input => {
+                input.addEventListener('input', function() { formatSSN(this); });
+                input.addEventListener('blur', function() { formatSSN(this); });
+            });
+
+            // Address validation (specific fields only, exclude years/months)
+            document.querySelectorAll('input[name="borrower1_current_address"], input[name="borrower1_previous_address_1"], input[name="borrower1_previous_address_2"], input[name="borrower1_employer_address"], input[name="borrower1_prev_employer_1_address"], input[name="borrower1_prev_employer_2_address"]').forEach(input => {
+                input.addEventListener('blur', function() { validateAddress(this); });
+            });
             document.querySelectorAll('.terms-grid input:not([readonly])').forEach(input => {
                 input.addEventListener('input', calculateTotals); 
             });
@@ -954,10 +1329,41 @@
                 toggleBorrowerBtn.textContent = 'Remove Co-Borrower';
                 toggleBorrowerBtn.classList.replace('add-borrower-btn', 'remove-borrower-btn');
                 
+                // Currency input formatting for co-borrower (all event listeners combined)
                 borrower2Container.querySelectorAll('.currency-input').forEach(input => {
                     input.addEventListener('blur', function() { formatCurrency(this); calculateTotals(); });
                     input.addEventListener('focus', function() { this.value = String(this.value).replace(/[$,]/g, ''); });
+                    input.addEventListener('input', function() {
+                        // Remove any non-digit or decimal characters while typing
+                        let value = this.value.replace(/[^\d.]/g, '');
+                        const parts = value.split('.');
+                        if (parts.length > 2) {
+                            value = parts[0] + '.' + parts.slice(1).join('');
+                        }
+                        if (parts.length > 1) {
+                            value = parts[0] + '.' + parts[1].slice(0, 2);
+                        }
+                        this.value = value;
+                    });
                 });
+
+                // Add event listeners for phone number formatting in co-borrower section
+                borrower2Container.querySelectorAll('input[type="tel"]').forEach(input => {
+                    input.addEventListener('input', function() { formatPhoneNumber(this); });
+                    input.addEventListener('blur', function() { formatPhoneNumber(this); });
+                });
+
+                // Add event listeners for SSN formatting in co-borrower section
+                borrower2Container.querySelectorAll('input[name*="ssn"]').forEach(input => {
+                    input.addEventListener('input', function() { formatSSN(this); });
+                    input.addEventListener('blur', function() { formatSSN(this); });
+                });
+
+                // Add event listeners for address validation in co-borrower section (specific fields only, exclude years/months)
+                borrower2Container.querySelectorAll('input[name="borrower2_current_address"], input[name="borrower2_previous_address_1"], input[name="borrower2_previous_address_2"], input[name="borrower2_employer_address"], input[name="borrower2_prev_employer_1_address"], input[name="borrower2_prev_employer_2_address"]').forEach(input => {
+                    input.addEventListener('blur', function() { validateAddress(this); });
+                });
+
                 setupBorrowerListeners('borrower2Container'); 
                 coBorrowerVisible = true;
             };
@@ -983,6 +1389,7 @@
 
             creditAppForm.addEventListener('submit', async function(event) {
                 event.preventDefault();
+                
                 submitButton.disabled = true;
                 submitButton.textContent = 'Submitting...';
 
@@ -1081,7 +1488,7 @@
 
 
             try {
-                const response = await fetch(window.location.protocol + '//' + window.location.hostname + ':3000/api/applications/submit', {
+                const response = await fetch('/api/applications/submit', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

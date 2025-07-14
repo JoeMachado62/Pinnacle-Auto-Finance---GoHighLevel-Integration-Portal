@@ -36,13 +36,14 @@
       "subscriptionTier": "basic",
       "status": "active",
       "createdAt": "2025-06-30T12:03:39.121Z",
-      "lastLogin": "2025-07-01T01:40:01.555Z",
+      "lastLogin": "2025-07-14T20:28:09.868Z",
       "failedLoginAttempts": 0,
       "accountLockedUntil": null,
       "emailVerified": false,
       "ghlUserId": null,
       "ghlContactId": null,
-      "ghlIntegrationEnabled": false
+      "ghlIntegrationEnabled": false,
+      "updatedAt": "2025-07-14T15:02:29.414Z"
     },
     {
       "id": "054bdfac-3867-4b3a-8921-043784f2930c",
@@ -87,5 +88,5 @@
       "ghlIntegrationEnabled": false
     }
   ],
-  "lastUpdated": "2025-07-01T01:40:01.555Z"
+  "lastUpdated": "2025-07-14T20:28:09.868Z"
 }

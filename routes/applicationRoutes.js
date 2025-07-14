@@ -79,6 +79,17 @@ router.post('/submit',
             const dealer = req.user;
             const clientIP = getClientIP(req);
 
+            // Debug: Log received form data
+            logger.info('Application submission - Form data received:', {
+                dealerId: dealer.id,
+                formDataKeys: Object.keys(formData),
+                vehicleYear: formData.vehicle_year,
+                vehicleMakeModel: formData.vehicle_make_model,
+                amountFinanced: formData.amountFinanced,
+                totalDown: formData.total_down,
+                sellingPrice: formData.sellingPrice
+            });
+
             // Validate required fields
             const requiredFields = [
                 'borrower1_firstName',
@@ -109,9 +120,12 @@ router.post('/submit',
                 // Basic application info (unencrypted for dashboard display)
                 applicantName: `${formData.borrower1_firstName} ${formData.borrower1_lastName}`,
                 applicantEmail: formData.borrower1_email,
-                vehicleInfo: `${formData.vehicle_year} ${formData.vehicle_make_model}`,
-                amountFinanced: parseFloat(formData.amountFinanced) || 0,
-                downPayment: parseFloat(formData.total_down || formData.downPayment || 0),
+                vehicleInfo: `${formData.vehicle_year} ${formData.vehicle_make_model}`.trim(),
+                amountFinanced: parseFloat(formData.amountFinanced?.replace(/[$,]/g, '') || 0),
+                downPayment: parseFloat(formData.total_down?.replace(/[$,]/g, '') || formData.totalDown?.replace(/[$,]/g, '') || formData.cashDown?.replace(/[$,]/g, '') || 0),
+                
+                // Store complete application data for deal jacket reconstruction
+                applicantData: formData,
                 
                 // Encrypted sensitive data
                 ...encryptSensitiveData(formData),
@@ -336,8 +350,60 @@ router.get('/:applicationId',
             // Get conversation history
             const conversations = await db.getConversationsByApplicationId(applicationId);
 
-            // Format for deal jacket display
+            // Format for deal jacket display - transform flat data to nested structure
             const dealJacket = {
+                // Transform flat application data to nested structure expected by frontend
+                id: application.id,
+                status: application.status,
+                dateAdded: application.createdAt,
+                monetaryValue: application.amountFinanced,
+                primaryApplicant: {
+                    name: application.applicantName || 'N/A',
+                    email: application.applicantData?.borrower1_email || application.applicantEmail || 'N/A',
+                    phone: application.applicantData?.borrower1_phone || 'N/A',
+                    ssn: application.applicantData?.borrower1_ssn || 'N/A',
+                    currentAddress: application.applicantData?.borrower1_currentAddress || 'N/A',
+                    addressYears: application.applicantData?.borrower1_addressYears || '0',
+                    addressMonths: application.applicantData?.borrower1_addressMonths || '0',
+                    employment: {
+                        currentEmployer: application.applicantData?.borrower1_employer || 'N/A',
+                        income: application.applicantData?.borrower1_income || 0,
+                        employmentYears: application.applicantData?.borrower1_employmentYears || '0',
+                        employmentMonths: application.applicantData?.borrower1_employmentMonths || '0'
+                    }
+                },
+                coApplicant: application.applicantData?.borrower2_firstName ? {
+                    name: `${application.applicantData.borrower2_firstName} ${application.applicantData.borrower2_lastName}`,
+                    email: application.applicantData.borrower2_email || 'N/A',
+                    phone: application.applicantData.borrower2_phone || 'N/A',
+                    ssn: application.applicantData.borrower2_ssn || 'N/A',
+                    currentAddress: application.applicantData.borrower2_currentAddress || 'N/A',
+                    employment: {
+                        currentEmployer: application.applicantData.borrower2_employer || 'N/A',
+                        income: application.applicantData.borrower2_income || 0
+                    }
+                } : null,
+                vehicle: {
+                    year: application.applicantData?.vehicle_year || '',
+                    makeModel: application.applicantData?.vehicle_make_model || application.vehicleInfo || 'N/A',
+                    vin: application.applicantData?.vehicle_vin || 'N/A',
+                    mileage: application.applicantData?.vehicle_mileage || 'N/A'
+                },
+                financial: {
+                    sellingPrice: application.applicantData?.vehicle_sellingPrice || application.amountFinanced || 0,
+                    amountFinanced: application.amountFinanced || 0,
+                    cashDown: application.applicantData?.downPayment || application.downPayment || 0,
+                    taxes: application.applicantData?.taxes || 0,
+                    titleFees: application.applicantData?.titleFees || 0
+                },
+                dealer: {
+                    name: dealer.dealerName,
+                    contact: dealer.contactName,
+                    telephone: dealer.phone
+                },
+                workflow: {
+                    lastUpdated: application.updatedAt || application.createdAt
+                },
                 application: {
                     id: application.id,
                     applicantName: application.applicantName,
@@ -633,6 +699,53 @@ router.get('/:applicationId/export',
             res.status(500).json({
                 success: false,
                 message: 'Failed to export application data'
+            });
+        }
+    }
+);
+
+// ===== GET APPLICATION FORM DATA FOR EDITING =====
+router.get('/:applicationId/form-data', 
+    authenticateToken,
+    requirePermission('view_own_applications'),
+    async (req, res) => {
+        try {
+            const { applicationId } = req.params;
+            const dealer = req.user;
+
+            const application = await db.getApplicationById(applicationId);
+            if (!application) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Application not found'
+                });
+            }
+
+            // Verify dealer owns this application
+            if (application.dealerId !== dealer.id) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied to this application'
+                });
+            }
+
+            res.json({
+                success: true,
+                formData: application.applicantData || {},
+                applicationInfo: {
+                    id: application.id,
+                    status: application.status,
+                    dtStatus: application.dtStatus,
+                    createdAt: application.createdAt,
+                    isReadOnly: application.status !== 'submitted' // Only allow editing if still in submitted status
+                }
+            });
+
+        } catch (error) {
+            logger.error('Get application form data error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch application form data'
             });
         }
     }

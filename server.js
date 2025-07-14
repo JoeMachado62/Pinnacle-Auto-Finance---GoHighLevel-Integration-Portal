@@ -77,7 +77,8 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com"],
+            scriptSrcAttr: ["'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: ["'self'"]
         }
@@ -258,19 +259,13 @@ logDebug('ROUTES', 'Setting up root route...');
 app.get('/', (req, res) => {
     logDebug('ROOT_ROUTE', 'Root route accessed', {
         ip: req.ip,
-        userAgent: req.headers['user-agent'],
-        hasAuth: !!req.headers['authorization']
+        userAgent: req.headers['user-agent']
     });
     
-    // Check if user is already logged in
-    const authHeader = req.headers['authorization'];
-    if (authHeader) {
-        logDebug('ROOT_ROUTE', 'User has auth header, redirecting to dashboard');
-        res.redirect('/dashboard.html');
-    } else {
-        logDebug('ROOT_ROUTE', 'No auth header, redirecting to login');
-        res.redirect('/login.html');
-    }
+    // Always redirect to dashboard - let the dashboard's JavaScript handle auth checking
+    // This prevents the redirect loop when users navigate to "/" after successful login
+    logDebug('ROOT_ROUTE', 'Redirecting to dashboard for client-side auth check');
+    res.redirect('/dashboard.html');
 });
 
 // ===== API ROUTES =====
@@ -340,7 +335,7 @@ app.get('*', (req, res) => {
         '/login.html',
         '/dashboard.html',
         '/credit_application.html',
-        '/application-details.html',
+        '/deal-jacket.html',
         '/register.html'
     ];
 

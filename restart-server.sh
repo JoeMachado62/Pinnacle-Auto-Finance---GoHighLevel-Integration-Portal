@@ -460,13 +460,21 @@ case "${1:-}" in
         ;;
 esac
 
-# Check if running as root (not recommended)
+# Check if running as root and auto-switch to paf-user if available
 if [ "$EUID" -eq 0 ]; then
-    warn "Running as root is not recommended for Node.js applications"
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    # Check if paf-user exists
+    if id "paf-user" &>/dev/null; then
+        log "Detected root user - automatically switching to paf-user for security"
+        log "Re-executing script as paf-user..."
+        exec sudo -u paf-user -H "$0" "$@"
+    else
+        warn "Running as root is not recommended for Node.js applications"
+        warn "Consider creating a dedicated user: sudo useradd -r -s /bin/bash -d /var/www/paf-ghl paf-user"
+        read -p "Continue anyway? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
 fi
 
