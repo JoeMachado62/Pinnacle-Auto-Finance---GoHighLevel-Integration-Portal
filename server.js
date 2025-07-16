@@ -196,6 +196,15 @@ app.use(express.static(staticPath, {
     lastModified: true
 }));
 
+// Serve uploaded files (profile pictures, documents, etc.)
+const uploadsPath = path.join(__dirname, 'uploads');
+logDebug('STATIC_FILES', `Uploads directory: ${uploadsPath}`);
+app.use('/uploads', express.static(uploadsPath, {
+    maxAge: config.NODE_ENV === 'production' ? '7d' : '0',
+    etag: true,
+    lastModified: true
+}));
+
 // Add middleware to log static file requests
 app.use((req, res, next) => {
     if (req.url.includes('.html') || req.url.includes('.css') || req.url.includes('.js')) {

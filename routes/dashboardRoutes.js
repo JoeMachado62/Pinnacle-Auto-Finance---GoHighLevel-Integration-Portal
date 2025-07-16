@@ -1,11 +1,47 @@
 // routes/dashboardRoutes.js - REFACTORED FOR NEW SYSTEM
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { authenticateToken, authenticatePremiumDealer, requirePermission } = require('../middleware/auth');
 const dashboardService = require('../services/dashboardService');
 const db = require('../services/databaseService');
 const ghlApiService = require('../services/ghlApiService');
 const { logger, logBusiness, logSecurity } = require('../utils/logger');
+
+// ===== MULTER CONFIGURATION FOR PROFILE PICTURES =====
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadPath = path.join(__dirname, '../uploads/profile-pictures');
+        // Ensure directory exists
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        // Generate unique filename: dealerId-timestamp.extension
+        const extension = path.extname(file.originalname);
+        const filename = `${req.user.id}-${Date.now()}${extension}`;
+        cb(null, filename);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+        // Only allow image files
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed'), false);
+        }
+    }
+});
 
 // ===== GET DEALER DASHBOARD DATA =====
 router.get('/', 
@@ -209,6 +245,7 @@ router.get('/profile',
                     finNumber: dealer.finNumber,
                     subscriptionTier: dealer.subscriptionTier,
                     ghlIntegrationEnabled: dealer.ghlIntegrationEnabled,
+                    profilePictureUrl: dealer.profilePictureUrl,
                     stats: stats
                 },
                 features: {
@@ -241,10 +278,19 @@ router.get('/profile',
 router.put('/profile', 
     authenticateToken,
     requirePermission('manage_own_profile'),
+    upload.single('profilePicture'), // Add multer middleware for file upload
     async (req, res) => {
         try {
             const dealer = req.user;
-            const { contactName, phone, address, dealerName } = req.body;
+            const { contactName, phone, address, dealerName, email } = req.body;
+
+            // Debug logging
+            logger.info('Profile update request received', {
+                dealerId: dealer.id,
+                hasFile: !!req.file,
+                bodyKeys: Object.keys(req.body),
+                fileName: req.file ? req.file.filename : null
+            });
 
             // Validate input
             const updates = {};
@@ -252,15 +298,47 @@ router.put('/profile',
             if (phone && phone.trim()) updates.phone = phone.trim();
             if (address && address.trim()) updates.address = address.trim();
             if (dealerName && dealerName.trim()) updates.dealerName = dealerName.trim();
+            if (email && email.trim()) updates.email = email.trim();
 
-            if (Object.keys(updates).length === 0) {
+            // Handle profile picture upload
+            let profilePictureUrl = null;
+            if (req.file) {
+                // Delete old profile picture if it exists
+                if (dealer.profilePictureUrl) {
+                    const oldImagePath = path.join(__dirname, '../', dealer.profilePictureUrl);
+                    if (fs.existsSync(oldImagePath)) {
+                        try {
+                            fs.unlinkSync(oldImagePath);
+                        } catch (err) {
+                            logger.warn('Failed to delete old profile picture:', err);
+                        }
+                    }
+                }
+
+                // Set new profile picture URL
+                profilePictureUrl = `uploads/profile-pictures/${req.file.filename}`;
+                updates.profilePictureUrl = profilePictureUrl;
+                
+                logBusiness('Profile picture uploaded', {
+                    dealerId: dealer.id,
+                    filename: req.file.filename,
+                    fileSize: req.file.size
+                });
+            }
+
+            // Check if we have any updates (either form fields or file upload)
+            if (Object.keys(updates).length === 0 && !req.file) {
                 return res.status(400).json({
                     success: false,
                     message: 'No valid updates provided'
                 });
             }
 
-            const updatedDealer = await db.updateDealer(dealer.id, updates);
+            // Only update database if we have actual field updates
+            let updatedDealer = dealer;
+            if (Object.keys(updates).length > 0) {
+                updatedDealer = await db.updateDealer(dealer.id, updates);
+            }
 
             logBusiness('Profile updated', {
                 dealerId: dealer.id,
@@ -270,6 +348,7 @@ router.put('/profile',
             res.json({
                 success: true,
                 message: 'Profile updated successfully',
+                profilePictureUrl: profilePictureUrl, // Include this for frontend update
                 dealer: {
                     id: updatedDealer.id,
                     email: updatedDealer.email,
@@ -277,11 +356,24 @@ router.put('/profile',
                     contactName: updatedDealer.contactName,
                     phone: updatedDealer.phone,
                     address: updatedDealer.address,
-                    subscriptionTier: updatedDealer.subscriptionTier
+                    subscriptionTier: updatedDealer.subscriptionTier,
+                    profilePictureUrl: updatedDealer.profilePictureUrl
                 }
             });
 
         } catch (error) {
+            // Clean up uploaded file if database update fails
+            if (req.file) {
+                const filePath = path.join(__dirname, '../uploads/profile-pictures', req.file.filename);
+                if (fs.existsSync(filePath)) {
+                    try {
+                        fs.unlinkSync(filePath);
+                    } catch (err) {
+                        logger.warn('Failed to cleanup uploaded file:', err);
+                    }
+                }
+            }
+
             logger.error('Profile update error:', error);
             res.status(500).json({
                 success: false,

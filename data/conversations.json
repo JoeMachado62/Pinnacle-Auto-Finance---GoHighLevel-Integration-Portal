@@ -1,51 +1,6 @@
 {
   "conversations": [
     {
-      "applicationId": "70b18954-34a1-4641-8377-0592a935cf9b",
-      "noteType": "system_note",
-      "content": "Test application submitted successfully",
-      "createdBy": "d7215875-1f3d-476b-8e85-dc7dd8aedb87",
-      "createdByName": "John Test",
-      "createdByType": "user",
-      "attachments": [],
-      "isInternal": false,
-      "importanceLevel": "normal",
-      "notificationSent": false,
-      "ghlSynced": false,
-      "id": "cf896f20-fbeb-42d7-be4b-b655f8f975e9",
-      "timestamp": "2025-06-30T11:21:34.768Z"
-    },
-    {
-      "applicationId": "884b5ef2-68d9-4935-9a78-add2b892b3c5",
-      "noteType": "system_note",
-      "content": "Credit application submitted for Max Machado. Vehicle: 2021 Chevy, Amount: $0",
-      "createdBy": "system",
-      "createdByName": "System",
-      "createdByType": "user",
-      "attachments": [],
-      "isInternal": false,
-      "importanceLevel": "normal",
-      "notificationSent": false,
-      "ghlSynced": false,
-      "id": "97615dda-4ee5-4140-a663-aa3cf7f5cd73",
-      "timestamp": "2025-07-14T20:41:27.005Z"
-    },
-    {
-      "applicationId": "bf41dd18-fb72-4b5a-92a4-5734ac36da87",
-      "noteType": "system_note",
-      "content": "Credit application submitted for Zulia Castillo. Vehicle: 2021 Chevy, Amount: $0",
-      "createdBy": "system",
-      "createdByName": "System",
-      "createdByType": "user",
-      "attachments": [],
-      "isInternal": false,
-      "importanceLevel": "normal",
-      "notificationSent": false,
-      "ghlSynced": false,
-      "id": "aa525be1-760f-49b6-b595-8801bbf44c11",
-      "timestamp": "2025-07-14T21:29:04.078Z"
-    },
-    {
       "applicationId": "f12a5150-990b-406a-ac26-3c16828ca77f",
       "noteType": "system_note",
       "content": "Credit application submitted for Luz Markham. Vehicle: 2021 Ford, Amount: $27,330.93",
@@ -61,5 +16,5 @@
       "timestamp": "2025-07-14T21:43:27.088Z"
     }
   ],
-  "lastUpdated": "2025-07-14T21:43:27.088Z"
+  "lastUpdated": "2025-07-16T02:43:00.000Z"
 }
