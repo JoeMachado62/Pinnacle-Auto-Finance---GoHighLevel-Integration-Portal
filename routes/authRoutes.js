@@ -326,19 +326,48 @@ router.post('/verify-2fa', async (req, res) => {
 
         logger.info(`Dealer logged in successfully: ${dealer.email} from IP: ${clientIP}`);
 
-        // Determine redirect and features based on subscription tier
-        let redirectUrl = '/dashboard';
+        // Determine redirect and features based on subscription tier and role
+        let redirectUrl = '/dashboard.html';
         let features = {
             basicFeatures: true,
-            premiumFeatures: dealer.subscriptionTier === 'premium'
+            premiumFeatures: dealer.subscriptionTier === 'premium' || dealer.subscriptionTier === 'admin',
+            adminFeatures: dealer.role === 'admin' || dealer.subscriptionTier === 'admin'
         };
 
-        if (dealer.subscriptionTier === 'premium') {
+        // Admin users get redirected to admin dashboard
+        if (dealer.role === 'admin' || dealer.subscriptionTier === 'admin') {
+            redirectUrl = '/admin-dashboard.html';
+            features.adminFeatures = true;
+            features.premiumFeatures = true; // Admins have all premium features too
+            features.ghlPortalAvailable = true;
+            features.advancedReporting = true;
+            features.marketingTools = true;
+            features.crossDealerAccess = true;
+            features.systemManagement = true;
+            
+            // Log admin login for debugging
+            logger.info(`🔥 ADMIN LOGIN DETECTED - Redirecting to admin dashboard`, {
+                dealerId: dealer.id,
+                dealerEmail: dealer.email,
+                role: dealer.role,
+                subscriptionTier: dealer.subscriptionTier,
+                redirectUrl: redirectUrl
+            });
+        } else if (dealer.subscriptionTier === 'premium') {
             features.ghlPortalAvailable = true;
             features.advancedReporting = true;
             features.marketingTools = true;
             // TODO: Generate GHL SSO URL when GHL integration is implemented
         }
+
+        // Log the final response for debugging
+        logger.info(`🚀 SENDING LOGIN RESPONSE`, {
+            dealerId: dealer.id,
+            dealerEmail: dealer.email,
+            redirectUrl: redirectUrl,
+            isAdmin: dealer.role === 'admin' || dealer.subscriptionTier === 'admin',
+            features: features
+        });
 
         res.json({
             success: true,
@@ -350,6 +379,7 @@ router.post('/verify-2fa', async (req, res) => {
                 dealerName: dealer.dealerName,
                 contactName: dealer.contactName,
                 subscriptionTier: dealer.subscriptionTier,
+                role: dealer.role,
                 lastLogin: dealer.lastLogin,
                 ghlIntegrationEnabled: dealer.ghlIntegrationEnabled
             },
@@ -464,6 +494,188 @@ router.get('/profile', authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch profile'
+        });
+    }
+});
+
+// ===== FORGOT PASSWORD =====
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const clientIP = getClientIP(req);
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email address is required'
+            });
+        }
+
+        // Check if dealer exists
+        const dealer = await db.getDealerByEmail(email.toLowerCase().trim());
+        if (!dealer) {
+            // Don't reveal if email exists or not for security
+            return res.json({
+                success: true,
+                message: 'If an account with that email exists, password reset instructions have been sent.'
+            });
+        }
+
+        // Generate reset code (using same 2FA system)
+        const resetCode = authService.generate2FACode();
+        const sessionId = crypto.randomBytes(32).toString('hex');
+        
+        // Store reset session (expires in 30 minutes)
+        const expiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
+        twoFactorSessions.set(sessionId, {
+            dealerId: dealer.id,
+            email: dealer.email,
+            code: resetCode,
+            type: 'password_reset',
+            attempts: 0,
+            maxAttempts: 3,
+            expiresAt: expiresAt,
+            clientIP: clientIP
+        });
+
+        // Store in database as well
+        await db.store2FACode(dealer.id, resetCode, dealer.email, 'password_reset', 30);
+
+        // Send reset email
+        try {
+            await emailService.send2FACode(dealer.email, resetCode, 'password_reset', {
+                dealerName: dealer.dealerName,
+                resetUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password.html?session=${sessionId}`
+            });
+        } catch (emailError) {
+            logger.error('Failed to send password reset email:', emailError);
+            twoFactorSessions.delete(sessionId);
+            
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send reset instructions. Please try again.'
+            });
+        }
+
+        logger.info(`Password reset requested for dealer: ${dealer.email} from IP: ${clientIP}`);
+
+        res.json({
+            success: true,
+            message: 'If an account with that email exists, password reset instructions have been sent.',
+            sessionId: sessionId // Include for frontend handling
+        });
+
+    } catch (error) {
+        logger.error('Forgot password error:', {
+            error: error.message,
+            ip: getClientIP(req),
+            email: req.body.email
+        });
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to process password reset request. Please try again.'
+        });
+    }
+});
+
+// ===== RESET PASSWORD =====
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { sessionId, code, newPassword, confirmPassword } = req.body;
+        const clientIP = getClientIP(req);
+
+        if (!sessionId || !code || !newPassword || !confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'All fields are required'
+            });
+        }
+
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Passwords do not match'
+            });
+        }
+
+        if (newPassword.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 8 characters long'
+            });
+        }
+
+        // Get reset session
+        const session = twoFactorSessions.get(sessionId);
+        if (!session || session.type !== 'password_reset') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired reset session'
+            });
+        }
+
+        // Check expiration
+        if (Date.now() > session.expiresAt) {
+            twoFactorSessions.delete(sessionId);
+            return res.status(400).json({
+                success: false,
+                message: 'Reset session has expired. Please request a new password reset.'
+            });
+        }
+
+        // Check attempts
+        if (session.attempts >= session.maxAttempts) {
+            twoFactorSessions.delete(sessionId);
+            return res.status(429).json({
+                success: false,
+                message: 'Too many failed attempts. Please request a new password reset.'
+            });
+        }
+
+        // Verify code
+        if (session.code !== code.toString()) {
+            session.attempts++;
+            return res.status(400).json({
+                success: false,
+                message: `Invalid reset code. ${session.maxAttempts - session.attempts} attempts remaining.`
+            });
+        }
+
+        // Code is valid - reset password
+        const dealer = await db.getDealerById(session.dealerId);
+        if (!dealer) {
+            twoFactorSessions.delete(sessionId);
+            return res.status(400).json({
+                success: false,
+                message: 'Dealer not found'
+            });
+        }
+
+        // Update password
+        await authService.resetPassword(dealer.id, newPassword);
+
+        // Mark code as used and clean up
+        await db.use2FACode(session.dealerId, code);
+        twoFactorSessions.delete(sessionId);
+
+        logger.info(`Password reset completed for dealer: ${dealer.email} from IP: ${clientIP}`);
+
+        res.json({
+            success: true,
+            message: 'Password has been reset successfully. You can now login with your new password.'
+        });
+
+    } catch (error) {
+        logger.error('Reset password error:', {
+            error: error.message,
+            ip: getClientIP(req),
+            sessionId: req.body.sessionId
+        });
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset password. Please try again.'
         });
     }
 });

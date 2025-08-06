@@ -149,9 +149,64 @@ class DatabaseService {
         return applications.slice(0, limit);
     }
 
+    async getAllApplications(limit = 100, status = null, dealerId = null, sortBy = 'createdAt', sortOrder = 'desc') {
+        const data = await this.readFile(this.applicationsFile);
+        let applications = [...data.applications];
+        
+        // Filter by status if provided
+        if (status) {
+            applications = applications.filter(app => app.status === status);
+        }
+        
+        // Filter by dealer if provided
+        if (dealerId) {
+            applications = applications.filter(app => app.dealerId === dealerId);
+        }
+        
+        // Sort applications
+        applications.sort((a, b) => {
+            let aValue = a[sortBy];
+            let bValue = b[sortBy];
+            
+            // Handle date sorting
+            if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+                aValue = new Date(aValue);
+                bValue = new Date(bValue);
+            }
+            
+            if (sortOrder === 'desc') {
+                return bValue > aValue ? 1 : bValue < aValue ? -1 : 0;
+            } else {
+                return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+            }
+        });
+        
+        return applications.slice(0, limit);
+    }
+
     async getApplicationById(id) {
         const data = await this.readFile(this.applicationsFile);
         return data.applications.find(app => app.id === id);
+    }
+
+    async getApplicationsWithDealerInfo(limit = 100, filters = {}) {
+        const applications = await this.getAllApplications(limit, filters.status, filters.dealerId, filters.sortBy, filters.sortOrder);
+        const dealersData = await this.readFile(this.dealersFile);
+        
+        // Enrich applications with dealer information
+        return applications.map(app => {
+            const dealer = dealersData.dealers.find(d => d.id === app.dealerId);
+            return {
+                ...app,
+                dealerInfo: dealer ? {
+                    dealerName: dealer.dealerName,
+                    contactName: dealer.contactName,
+                    email: dealer.email,
+                    phone: dealer.phone,
+                    subscriptionTier: dealer.subscriptionTier
+                } : null
+            };
+        });
     }
 
     async updateApplication(id, updates) {

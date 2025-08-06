@@ -92,16 +92,24 @@ class AuthService {
                 }
             }
 
-            // Reset failed attempts on successful login
+            // Reset failed attempts on successful login (non-critical operation)
             if (dealer.failedLoginAttempts > 0) {
-                await db.updateDealer(dealer.id, {
-                    failedLoginAttempts: 0,
-                    accountLockedUntil: null
-                });
+                try {
+                    await db.updateDealer(dealer.id, {
+                        failedLoginAttempts: 0,
+                        accountLockedUntil: null
+                    });
+                } catch (error) {
+                    logger.warn('Failed to reset failed login attempts, but continuing authentication:', error);
+                }
             }
 
-            // Update last login
-            await db.updateDealerLastLogin(dealer.id);
+            // Update last login (non-critical operation)
+            try {
+                await db.updateDealerLastLogin(dealer.id);
+            } catch (error) {
+                logger.warn('Failed to update last login time, but continuing authentication:', error);
+            }
 
             // Generate JWT token
             const token = jwt.sign(
@@ -129,6 +137,12 @@ class AuthService {
         try {
             const dealer = await db.getDealerById(dealerId);
             if (!dealer) return;
+
+            // Don't increment attempts if account is already locked and still within lockout period
+            if (dealer.accountLockedUntil && new Date(dealer.accountLockedUntil) > new Date()) {
+                logger.warn(`Blocked additional login attempt for already locked account: ${dealer.email}`);
+                return; // Don't extend lockout time
+            }
 
             const newFailedAttempts = (dealer.failedLoginAttempts || 0) + 1;
             const updates = { failedLoginAttempts: newFailedAttempts };
@@ -226,6 +240,32 @@ class AuthService {
             return true;
         } catch (error) {
             logger.error('Error changing password:', error);
+            throw error;
+        }
+    }
+
+    async resetPassword(dealerId, newPassword) {
+        try {
+            const dealer = await db.getDealerById(dealerId);
+            if (!dealer) {
+                throw new Error('Dealer not found');
+            }
+
+            // Hash new password
+            const saltRounds = 12;
+            const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+            // Update password and reset failed attempts
+            await db.updateDealer(dealerId, {
+                passwordHash: newPasswordHash,
+                failedLoginAttempts: 0,
+                accountLockedUntil: null
+            });
+
+            logger.info(`Password reset for dealer: ${dealer.email}`);
+            return true;
+        } catch (error) {
+            logger.error('Error resetting password:', error);
             throw error;
         }
     }

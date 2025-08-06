@@ -542,6 +542,18 @@
                     <a class="submit-deal-link" onclick="goToSubmitApplication()">
                         <img src="images/submit-new-deal.png" alt="Submit New Deal">
                     </a>
+                    
+                    <!-- Premium Tools Link (only shown for premium users) -->
+                    <div id="premiumToolsSection" style="display: none; margin-top: 20px;">
+                        <a class="premium-tools-link" onclick="goToPremiumDashboard()">
+                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 25px; border-radius: 8px; text-align: center; cursor: pointer; transition: transform 0.2s ease;">
+                                <i class="fas fa-rocket" style="margin-right: 10px;"></i>
+                                <strong>Premium Marketing Tools</strong>
+                                <br>
+                                <small style="opacity: 0.9;">GoHighLevel CRM & Automation</small>
+                            </div>
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -615,6 +627,33 @@
             return true;
         }
 
+        // Check if user is admin and redirect to admin dashboard
+        async function checkAdminRedirect() {
+            if (!authToken) return;
+            
+            try {
+                const response = await fetch('/api/dashboard/profile', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.dealer) {
+                        // Redirect admin users to admin dashboard
+                        if (data.dealer.role === 'admin' || data.dealer.subscriptionTier === 'admin') {
+                            console.log('Admin user detected, redirecting to admin dashboard...');
+                            window.location.href = '/admin-dashboard.html';
+                            return;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking user role:', error);
+            }
+        }
+
         function showAlert(message, type = 'error') {
             const alertContainer = document.getElementById('alertContainer');
             alertContainer.innerHTML = `
@@ -652,6 +691,11 @@
                         // Update profile picture if available
                         if (userData.profilePictureUrl) {
                             document.getElementById('dealerAvatar').src = userData.profilePictureUrl;
+                        }
+                        
+                        // Show premium tools section for premium users
+                        if (userData.subscriptionTier === 'premium') {
+                            document.getElementById('premiumToolsSection').style.display = 'block';
                         }
                     }
                 } else {
@@ -796,6 +840,15 @@
             }
             window.location.href = '/credit_application.html';
         }
+        
+        function goToPremiumDashboard() {
+            if (!authToken) {
+                alert('Please log in again.');
+                window.location.href = '/login.html';
+                return;
+            }
+            window.location.href = '/premium-dashboard.html';
+        }
 
         // Profile Image Preview Function
         function previewProfileImage(input) {
@@ -889,6 +942,8 @@
         // Initialize dashboard
         async function initDashboard() {
             if (!checkAuth()) return;
+            
+            await checkAdminRedirect();
 
             try {
                 await loadUserProfile();

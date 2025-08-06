@@ -47,6 +47,10 @@ const authRoutes = require('./routes/authRoutes');
 console.log('✅ Auth routes loaded');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 console.log('✅ Dashboard routes loaded');
+const adminRoutes = require('./routes/adminRoutes');
+console.log('✅ Admin routes loaded');
+const premiumRoutes = require('./routes/premiumRoutes');
+console.log('✅ Premium routes loaded');
 
 // Initialize Express app
 console.log('🏗️ Initializing Express app...');
@@ -80,7 +84,8 @@ app.use(helmet({
             scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-hashes'", "https://cdnjs.cloudflare.com"],
             scriptSrcAttr: ["'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'"]
+            connectSrc: ["'self'"],
+            frameSrc: ["'self'", "https://app.gohighlevel.com", "https://*.gohighlevel.com"]
         }
     },
     crossOriginEmbedderPolicy: false
@@ -291,6 +296,14 @@ logDebug('ROUTES', 'Mounting /api/dashboard routes...');
 app.use('/api/dashboard', dashboardRoutes);
 logDebug('ROUTES', '✅ Dashboard routes mounted');
 
+logDebug('ROUTES', 'Mounting /api/admin routes...');
+app.use('/api/admin', adminRoutes);
+logDebug('ROUTES', '✅ Admin routes mounted');
+
+logDebug('ROUTES', 'Mounting /api/premium routes...');
+app.use('/api/premium', premiumRoutes);
+logDebug('ROUTES', '✅ Premium routes mounted');
+
 // Also mount legacy route for backward compatibility
 logDebug('ROUTES', 'Mounting legacy /api/credit-application routes...');
 app.use('/api/credit-application', applicationRoutes);
@@ -345,7 +358,8 @@ app.get('*', (req, res) => {
         '/dashboard.html',
         '/credit_application.html',
         '/deal-jacket.html',
-        '/register.html'
+        '/register.html',
+        '/premium-dashboard.html'
     ];
 
     // If the requested path is a valid page, serve it

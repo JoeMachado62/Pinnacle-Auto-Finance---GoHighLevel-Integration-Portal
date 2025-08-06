@@ -327,6 +327,12 @@
             border: 1px solid #f5c6cb;
         }
 
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
         @media (max-width: 768px) {
             .deal-content {
                 grid-template-columns: 1fr;
@@ -468,6 +474,52 @@
             `;
         }
 
+        function renderConversationsTimeline(conversations) {
+            if (!conversations || conversations.length === 0) {
+                return `
+                    <div class="timeline-item">
+                        <div class="timeline-icon">📝</div>
+                        <div class="timeline-content">
+                            <div class="timeline-header">
+                                <div class="timeline-title">No conversations yet</div>
+                                <div class="timeline-date">${formatDate(new Date())}</div>
+                            </div>
+                            <div class="timeline-message">
+                                This application has no conversation history yet. Add a note below to start communicating about this deal.
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return conversations.map(conv => {
+                const isSystem = conv.createdBy === 'system';
+                const isAdmin = conv.type === 'admin_note';
+                const iconMap = {
+                    'system_note': '🔧',
+                    'admin_note': '👨‍💼', 
+                    'dealer_note': '🏪',
+                    'default': '💬'
+                };
+                const icon = iconMap[conv.type] || iconMap.default;
+
+                return `
+                    <div class="timeline-item">
+                        <div class="timeline-icon">${icon}</div>
+                        <div class="timeline-content">
+                            <div class="timeline-header">
+                                <div class="timeline-title">${conv.createdBy}</div>
+                                <div class="timeline-date">${formatDate(conv.timestamp)}</div>
+                            </div>
+                            <div class="timeline-message">
+                                ${conv.content}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         function renderDealJacket(deal) {
             return `
                 <div class="deal-header">
@@ -563,33 +615,27 @@
 
                         <!-- Conversations History -->
                         <div class="card">
-                            <div class="card-title">Conversations History</div>
-                            <div class="conversations-timeline">
-                                <div class="timeline-item">
-                                    <div class="timeline-icon">SA</div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-header">
-                                            <div class="timeline-title">Conversation from System Administrator</div>
-                                            <div class="timeline-date">${formatDate(deal.dateAdded)}</div>
-                                        </div>
-                                        <div class="timeline-message">
-                                            Application submitted and under review. Initial processing complete.
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="timeline-item">
-                                    <div class="timeline-icon">📄</div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-header">
-                                            <div class="timeline-title">Auto-post on Deal Created</div>
-                                            <div class="timeline-date">${formatDate(deal.dateAdded)}</div>
-                                        </div>
-                                        <div class="timeline-message">
-                                            Contact: Created by System Administrator.
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="card-title">
+                                Conversations History
+                                <button class="nav-btn secondary" onclick="refreshConversations()" style="float: right; padding: 4px 8px; font-size: 12px; margin-top: -4px;">
+                                    <i class="fas fa-refresh"></i> Refresh
+                                </button>
+                            </div>
+                            <div class="conversations-timeline" id="conversationsTimeline">
+                                ${renderConversationsTimeline(deal.conversations || [])}
+                            </div>
+                            
+                            <!-- Add Note Form -->
+                            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                                <h4 style="margin-bottom: 10px; font-size: 14px; color: var(--primary-red);">Add Note</h4>
+                                <textarea 
+                                    id="dealerNoteText" 
+                                    placeholder="Enter your note or question about this application..."
+                                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; min-height: 80px; font-size: 13px;"
+                                ></textarea>
+                                <button onclick="addDealerNote()" style="margin-top: 10px; background: var(--primary-red); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                                    <i class="fas fa-plus"></i> Add Note
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -724,6 +770,102 @@
                 showAlert('Failed to load deal details. Please try again.');
                 document.getElementById('dealContent').innerHTML = '<div class="loading">Failed to load deal</div>';
             }
+        }
+
+        async function refreshConversations() {
+            if (!dealId) return;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/applications/${dealId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.dealJacket.conversations) {
+                        const timeline = document.getElementById('conversationsTimeline');
+                        timeline.innerHTML = renderConversationsTimeline(result.dealJacket.conversations);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to refresh conversations:', error);
+            }
+        }
+
+        async function addDealerNote() {
+            const noteText = document.getElementById('dealerNoteText').value.trim();
+            
+            if (!noteText) {
+                alert('Please enter a note');
+                return;
+            }
+
+            if (!dealId) {
+                alert('No deal ID available');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/applications/${dealId}/conversations`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: noteText,
+                        notifyStakeholders: true
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Clear the text area
+                    document.getElementById('dealerNoteText').value = '';
+                    
+                    // Show success message
+                    showAlert('Note added successfully! Administrators will be notified.', 'success');
+                    
+                    // Refresh conversations
+                    await refreshConversations();
+                } else {
+                    throw new Error(result.message || 'Failed to add note');
+                }
+            } catch (error) {
+                console.error('Failed to add note:', error);
+                showAlert('Failed to add note. Please try again.', 'error');
+            }
+        }
+
+        function showAlert(message, type = 'error') {
+            // Create or update alert container
+            let alertContainer = document.getElementById('alertContainer');
+            if (!alertContainer) {
+                alertContainer = document.createElement('div');
+                alertContainer.id = 'alertContainer';
+                alertContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1000; max-width: 400px;';
+                document.body.appendChild(alertContainer);
+            }
+
+            const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+            const icon = type === 'success' ? 'check-circle' : 'exclamation-triangle';
+            
+            alertContainer.innerHTML = `
+                <div class="alert ${alertClass}" style="padding: 15px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <i class="fas fa-${icon}" style="margin-right: 8px;"></i>
+                    ${message}
+                </div>
+            `;
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alertContainer) {
+                    alertContainer.innerHTML = '';
+                }
+            }, 5000);
         }
 
         function logout() {

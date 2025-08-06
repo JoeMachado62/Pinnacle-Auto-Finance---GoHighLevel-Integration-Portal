@@ -361,6 +361,31 @@ const requirePermission = (permission) => {
                 'view_marketing_contacts',
                 'advanced_reporting',
                 'marketing_tools'
+            ],
+            admin: [
+                // All basic and premium permissions
+                'view_own_applications',
+                'submit_applications',
+                'view_own_dashboard',
+                'manage_own_profile',
+                'add_conversation_notes',
+                'access_ghl_portal',
+                'trigger_ghl_workflows',
+                'view_marketing_contacts',
+                'advanced_reporting',
+                'marketing_tools',
+                // Admin-specific permissions
+                'view_all_applications',
+                'view_all_dealers',
+                'manage_all_dealers',
+                'access_admin_panel',
+                'system_configuration',
+                'view_system_logs',
+                'manage_dealer_subscriptions',
+                'view_financial_reports',
+                'export_data',
+                'manage_admin_users',
+                'view_audit_logs'
             ]
         };
 
@@ -500,13 +525,14 @@ const authenticateAdmin = async (req, res, next) => {
             userRole: req.user.role
         });
         
-        // Check if user has admin role (future enhancement)
-        if (req.user.role !== 'admin') {
+        // Check if user has admin role or admin subscription tier
+        if (req.user.role !== 'admin' && req.user.subscriptionTier !== 'admin') {
             logSecurity('🚫 Admin access denied', {
                 requestId,
                 dealerId: req.user.id,
                 dealerEmail: req.user.email,
                 userRole: req.user.role,
+                subscriptionTier: req.user.subscriptionTier,
                 path: req.path,
                 ip: req.ip
             });

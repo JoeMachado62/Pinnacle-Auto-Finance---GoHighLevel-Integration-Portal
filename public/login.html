@@ -15,7 +15,7 @@
 
         body {
             font-family: 'Inter', sans-serif;
-            background: url('/images/pafghl bg.webp') center center/cover no-repeat, linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: url('/images/pafghl bg.webp') center center/cover no-repeat, linear-gradient(135deg, #1f1f1f 0%, #4a4a4a 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -34,7 +34,7 @@
         }
 
         .login-header {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
             color: white;
             padding: 40px 30px;
             text-align: center;
@@ -92,7 +92,7 @@
         }
 
         .step.active {
-            background: #3b82f6;
+            background: #dc2626;
             color: white;
         }
 
@@ -152,9 +152,9 @@
 
         .form-control:focus {
             outline: none;
-            border-color: #3b82f6;
+            border-color: #dc2626;
             background: white;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
         }
 
         .form-control.error {
@@ -186,13 +186,13 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
             color: white;
         }
 
         .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 10px 20px rgba(220, 38, 38, 0.3);
         }
 
         .btn-secondary {
@@ -257,9 +257,9 @@
         }
 
         .security-notice {
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            color: #1d4ed8;
+            background: #f5f5f5;
+            border: 1px solid #d1d5db;
+            color: #374151;
             padding: 12px 16px;
             border-radius: 8px;
             margin-bottom: 20px;
@@ -275,7 +275,7 @@
         }
 
         .resend-link {
-            color: #3b82f6;
+            color: #dc2626;
             text-decoration: none;
             font-size: 14px;
             cursor: pointer;
@@ -304,7 +304,7 @@
         }
 
         .login-footer a {
-            color: #3b82f6;
+            color: #dc2626;
             text-decoration: none;
             font-size: 14px;
         }
@@ -533,17 +533,30 @@
 
                     const data = await response.json();
 
+                    console.log('🔥 2FA RESPONSE:', data);
+                    
                     if (data.success) {
+                        console.log('🔥 2FA SUCCESS - Storing token and redirecting');
+                        
                         // Store auth token
                         localStorage.setItem('pinnacle_auth_token', data.token);
                         localStorage.setItem('pinnacle_dealer_info', JSON.stringify(data.dealer));
+                        
+                        // Debug logging for redirect URL
+                        console.log('🔥 LOGIN SUCCESS - Response data:', {
+                            redirectUrl: data.redirectUrl,
+                            dealer: data.dealer,
+                            features: data.features
+                        });
                         
                         // Show success message
                         this.showSuccess('Login successful! Redirecting...');
                         
                         // Redirect to dashboard
                         setTimeout(() => {
-                            window.location.href = data.redirectUrl || '/dashboard.html';
+                            const targetUrl = data.redirectUrl || '/dashboard.html';
+                            console.log('🔥 REDIRECTING TO:', targetUrl);
+                            window.location.href = targetUrl;
                         }, 1500);
                         
                     } else {
@@ -558,6 +571,7 @@
                     console.error('Verification error:', error);
                     this.showError('Network error. Please try again.');
                 } finally {
+                    console.log('🔥 CLEARING 2FA LOADING STATE');
                     this.setLoading('verifyBtn', false);
                 }
             }
@@ -649,14 +663,21 @@
 
             setLoading(buttonId, isLoading) {
                 const button = document.getElementById(buttonId);
-                const originalText = button.innerHTML;
                 
                 if (isLoading) {
+                    // Store original text before changing it
+                    if (!button.dataset.originalText) {
+                        button.dataset.originalText = button.innerHTML;
+                    }
                     button.disabled = true;
                     button.innerHTML = '<div class="spinner"></div> Processing...';
                 } else {
                     button.disabled = false;
+                    // Restore original text or use default
+                    const originalText = button.dataset.originalText || 'Submit';
                     button.innerHTML = originalText;
+                    // Clean up the stored text
+                    delete button.dataset.originalText;
                 }
             }
 

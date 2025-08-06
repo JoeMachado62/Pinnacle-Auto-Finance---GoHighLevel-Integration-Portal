@@ -822,6 +822,9 @@
             }
             
             function populateDealerFields(dealerInfo) {
+                // Debug: Log the dealer info to see what's being passed
+                console.log('Dealer info for auto-population:', dealerInfo);
+                
                 // Auto-fill the dealer fields
                 const dealerNameField = document.getElementById('dealerName');
                 const telephoneField = document.getElementById('telephone');
@@ -833,8 +836,11 @@
                 }
                 
                 if (telephoneField && dealerInfo.phone) {
+                    console.log('Setting telephone field with:', dealerInfo.phone);
                     telephoneField.value = dealerInfo.phone;
                     telephoneField.readOnly = true;
+                } else {
+                    console.log('Telephone field issue - telephoneField:', telephoneField, 'phone:', dealerInfo.phone);
                 }
                 
                 if (contactField && dealerInfo.contactName) {

@@ -66,12 +66,12 @@ async initializeTransporter() {
       }
     }
 
-    async send2FACode(email, code, userName = null) {
+    async send2FACode(email, code, codeType = 'login', additionalData = null) {
         try {
             // Test mode - simulate sending
             if (config.EMAIL_TEST_MODE) {
-                logger.info(`TEST MODE: Would send 2FA code ${code} to ${email}`);
-                console.log(`🔐 TEST 2FA CODE for ${email}: ${code}`);
+                logger.info(`TEST MODE: Would send ${codeType} code ${code} to ${email}`);
+                console.log(`🔐 TEST ${codeType.toUpperCase()} CODE for ${email}: ${code}`);
                 return true;
             }
 
@@ -79,23 +79,31 @@ async initializeTransporter() {
                 throw new Error('Email transporter not initialized');
             }
 
-            const subject = `Your Pinnacle Portal Security Code: ${code}`;
-            const htmlContent = this.create2FAEmailHTML(code, userName);
-            const textContent = this.create2FAEmailText(code, userName);
+            let subject, htmlContent, textContent;
+            
+            if (codeType === 'password_reset') {
+                subject = `Your Pinnacle Portal Password Reset Code: ${code}`;
+                htmlContent = this.createPasswordResetEmailHTML(code, additionalData);
+                textContent = this.createPasswordResetEmailText(code, additionalData);
+            } else {
+                subject = `Your Pinnacle Portal Security Code: ${code}`;
+                htmlContent = this.create2FAEmailHTML(code, additionalData?.userName);
+                textContent = this.create2FAEmailText(code, additionalData?.userName);
+            }
 
             const mailOptions = {
-            from: `"${this.fromName}" <${this.fromEmail}>`,
-            to: email,
-            subject: subject,
-            text: textContent,
-            html: htmlContent
-        };
+                from: `"${this.fromName}" <${this.fromEmail}>`,
+                to: email,
+                subject: subject,
+                text: textContent,
+                html: htmlContent
+            };
 
             const result = await this.transporter.sendMail(mailOptions);
-            logger.info(`2FA email sent to ${email}, messageId: ${result.messageId}`);
+            logger.info(`${codeType} email sent to ${email}, messageId: ${result.messageId}`);
             return true;
         } catch (error) {
-            logger.error('Error sending 2FA email:', error);
+            logger.error(`Error sending ${codeType} email:`, error);
             return false;
         }
     }
@@ -305,7 +313,7 @@ Sent: ${new Date().toLocaleString()}
                     
                     <!-- Call to Action -->
                     <div style="text-align: center; margin-bottom: 30px;">
-                        <a href="https://pinnacle-portal.com/dashboard" 
+                        <a href="https://portal.pinnacleautofinance.com/dashboard.html" 
                            style="display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                             View Full Details in Dashboard
                         </a>
@@ -378,7 +386,7 @@ Sent: ${new Date().toLocaleString()}
                     
                     <!-- Call to Action -->
                     <div style="text-align: center; margin-bottom: 30px;">
-                        <a href="https://pinnacle-portal.com/dashboard" 
+                        <a href="https://portal.pinnacleautofinance.com/dashboard.html" 
                            style="display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                             Access Your Dashboard
                         </a>
@@ -402,6 +410,135 @@ Sent: ${new Date().toLocaleString()}
         `;
     }
 
+    createPasswordResetEmailHTML(code, additionalData) {
+        const dealerName = additionalData?.dealerName || 'Dealer';
+        const resetUrl = additionalData?.resetUrl || '';
+        
+        return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Pinnacle Auto Finance - Password Reset</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: white;">
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 30px 20px; text-align: center;">
+                    <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">
+                        Password Reset Request
+                    </h1>
+                    <p style="color: #fca5a5; margin: 8px 0 0 0; font-size: 16px;">
+                        Secure access to your dealer portal
+                    </p>
+                </div>
+                
+                <!-- Content -->
+                <div style="padding: 40px 30px;">
+                    <h2 style="color: #1f2937; margin: 0 0 20px 0; font-size: 24px;">
+                        Hello ${dealerName},
+                    </h2>
+                    
+                    <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin-bottom: 25px;">
+                        We received a request to reset your password for the Pinnacle Auto Finance Dealer Portal.
+                    </p>
+                    
+                    <!-- Security Code -->
+                    <div style="background: #f8fafc; border: 2px solid #e5e7eb; border-radius: 12px; padding: 25px; text-align: center; margin-bottom: 25px;">
+                        <p style="color: #6b7280; margin: 0 0 10px 0; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                            Your Reset Code
+                        </p>
+                        <div style="background: white; border: 2px solid #dc2626; border-radius: 8px; padding: 20px; display: inline-block; margin-bottom: 15px;">
+                            <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: 700; color: #dc2626; letter-spacing: 8px;">
+                                ${code}
+                            </span>
+                        </div>
+                        <p style="color: #7c2d12; margin: 0; font-size: 14px; font-weight: 500;">
+                            ⏰ This code expires in 30 minutes
+                        </p>
+                    </div>
+                    
+                    <!-- Instructions -->
+                    <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                        <h3 style="color: #92400e; margin: 0 0 10px 0; font-size: 16px;">
+                            🔐 How to reset your password:
+                        </h3>
+                        <ol style="color: #92400e; margin: 0; padding-left: 20px; line-height: 1.6;">
+                            <li>Click the button below or visit the reset page</li>
+                            <li>Enter the 6-digit code: <strong>${code}</strong></li>
+                            <li>Create your new secure password</li>
+                            <li>Log in with your new password</li>
+                        </ol>
+                    </div>
+                    
+                    <!-- Call to Action -->
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <a href="${resetUrl}" 
+                           style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                            Reset My Password
+                        </a>
+                    </div>
+                    
+                    <!-- Security Notice -->
+                    <div style="background: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                        <p style="color: #991b1b; margin: 0; font-size: 14px; line-height: 1.5;">
+                            <strong>Security Notice:</strong> If you didn't request this password reset, please ignore this email. 
+                            Your account remains secure and no changes have been made.
+                        </p>
+                    </div>
+                    
+                    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin-bottom: 0;">
+                        If you continue to have issues accessing your account, please contact our support team.
+                    </p>
+                </div>
+                
+                <!-- Footer -->
+                <div style="background: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #6b7280; font-size: 12px; margin: 0; text-align: center;">
+                        This is an automated security message from Pinnacle Auto Finance<br>
+                        © 2025 Pinnacle Auto Finance. All rights reserved.
+                    </p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 10px 0 0 0; text-align: center;">
+                        Sent: ${new Date().toLocaleString()}
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+    }
+
+    createPasswordResetEmailText(code, additionalData) {
+        const dealerName = additionalData?.dealerName || 'Dealer';
+        const resetUrl = additionalData?.resetUrl || '';
+        
+        return `
+Pinnacle Auto Finance - Password Reset Request
+
+Hello ${dealerName},
+
+We received a request to reset your password for the Pinnacle Auto Finance Dealer Portal.
+
+Your Reset Code: ${code}
+
+This code expires in 30 minutes.
+
+To reset your password:
+1. Visit: ${resetUrl}
+2. Enter the 6-digit code: ${code}
+3. Create your new secure password
+4. Log in with your new password
+
+SECURITY NOTICE: If you didn't request this password reset, please ignore this email. Your account remains secure and no changes have been made.
+
+If you continue to have issues accessing your account, please contact our support team.
+
+© 2025 Pinnacle Auto Finance. All rights reserved.
+Sent: ${new Date().toLocaleString()}
+        `;
+    }
+
     async testConnection() {
         try {
             if (config.EMAIL_TEST_MODE) {
@@ -420,6 +557,206 @@ Sent: ${new Date().toLocaleString()}
             logger.error('Email connection test failed:', error);
             return false;
         }
+    }
+    async sendStatusUpdateNotification(dealerEmail, dealerName, applicationData, statusChange) {
+        if (!this.transporter || this.testMode) {
+            logger.info(`TEST MODE: Would send status update notification to ${dealerEmail} for application ${applicationData.id}`);
+            return true;
+        }
+
+        const subject = `Application Status Update - ${applicationData.applicantName}`;
+        const htmlContent = this.createStatusUpdateEmailHTML(dealerName, applicationData, statusChange);
+        
+        const mailOptions = {
+            from: `"Pinnacle Auto Finance" <${this.fromEmail}>`,
+            to: dealerEmail,
+            subject: subject,
+            html: htmlContent
+        };
+
+        try {
+            const result = await this.transporter.sendMail(mailOptions);
+            logger.info(`Status update notification sent to ${dealerEmail} for application ${applicationData.id}, messageId: ${result.messageId}`);
+            return true;
+        } catch (error) {
+            logger.error('Failed to send status update notification:', error);
+            return false;
+        }
+    }
+
+    async sendAdminNoteNotification(dealerEmail, dealerName, applicationData, adminNote) {
+        if (!this.transporter || this.testMode) {
+            logger.info(`TEST MODE: Would send admin note notification to ${dealerEmail} for application ${applicationData.id}`);
+            return true;
+        }
+
+        const subject = `New Message from Pinnacle Auto Finance - ${applicationData.applicantName}`;
+        const htmlContent = this.createAdminNoteEmailHTML(dealerName, applicationData, adminNote);
+        
+        const mailOptions = {
+            from: `"Pinnacle Auto Finance" <${this.fromEmail}>`,
+            to: dealerEmail,
+            subject: subject,
+            html: htmlContent
+        };
+
+        try {
+            const result = await this.transporter.sendMail(mailOptions);
+            logger.info(`Admin note notification sent to ${dealerEmail} for application ${applicationData.id}, messageId: ${result.messageId}`);
+            return true;
+        } catch (error) {
+            logger.error('Failed to send admin note notification:', error);
+            return false;
+        }
+    }
+
+    createStatusUpdateEmailHTML(dealerName, applicationData, statusChange) {
+        return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Application Status Update</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f5f5f5;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: white; padding: 30px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Pinnacle Auto Finance</h1>
+                    <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.9;">Application Status Update</p>
+                </div>
+                
+                <!-- Content -->
+                <div style="padding: 30px;">
+                    <p style="color: #1f2937; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">Hello ${dealerName},</p>
+                    
+                    <p style="color: #4b5563; font-size: 16px; line-height: 1.5; margin-bottom: 25px;">
+                        The status of your credit application has been updated by our team.
+                    </p>
+                    
+                    <!-- Application Details -->
+                    <div style="background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                        <h3 style="color: #dc2626; margin: 0 0 15px 0; font-size: 18px;">📋 Application Details</h3>
+                        <ul style="color: #4b5563; margin: 0; padding-left: 20px; line-height: 1.6;">
+                            <li><strong>Applicant:</strong> ${applicationData.applicantName}</li>
+                            <li><strong>Vehicle:</strong> ${applicationData.vehicleInfo}</li>
+                            <li><strong>Amount:</strong> $${applicationData.amountFinanced.toLocaleString()}</li>
+                            <li><strong>Application ID:</strong> ${applicationData.id}</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Status Update -->
+                    <div style="background: #ffffff; border: 2px solid #059669; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                        <h3 style="color: #059669; margin: 0 0 15px 0; font-size: 18px;">🔄 Status Update</h3>
+                        <p style="margin: 5px 0;"><strong>Previous Status:</strong> <span style="color: #6b7280;">${statusChange.oldStatus}</span></p>
+                        <p style="margin: 5px 0;"><strong>New Status:</strong> <span style="color: #dc2626; font-weight: bold; font-size: 16px;">${statusChange.newStatus}</span></p>
+                        ${statusChange.notes ? `
+                        <div style="margin: 15px 0 0 0;">
+                            <strong>Additional Notes:</strong>
+                            <div style="margin: 8px 0; padding: 12px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #dc2626;">
+                                ${statusChange.notes}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    <!-- Call to Action -->
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <a href="${process.env.FRONTEND_URL || 'https://yoursite.com'}/deal-jacket.html?id=${applicationData.id}" 
+                           style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                            🔍 View Deal Jacket
+                        </a>
+                    </div>
+                    
+                    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin-bottom: 0;">
+                        You can log into your dealer dashboard to view the complete application details, conversation history, and add any notes or questions.
+                    </p>
+                </div>
+                
+                <!-- Footer -->
+                <div style="background: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #6b7280; font-size: 12px; margin: 0; text-align: center;">
+                        This is an automated notification from Pinnacle Auto Finance<br>
+                        © ${new Date().getFullYear()} Pinnacle Auto Finance. All rights reserved.
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+    }
+
+    createAdminNoteEmailHTML(dealerName, applicationData, adminNote) {
+        return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>New Message from Pinnacle Auto Finance</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f5f5f5;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: white; padding: 30px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Pinnacle Auto Finance</h1>
+                    <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.9;">💬 New Message</p>
+                </div>
+                
+                <!-- Content -->
+                <div style="padding: 30px;">
+                    <p style="color: #1f2937; font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">Hello ${dealerName},</p>
+                    
+                    <p style="color: #4b5563; font-size: 16px; line-height: 1.5; margin-bottom: 25px;">
+                        You have received a new message regarding your credit application.
+                    </p>
+                    
+                    <!-- Application Details -->
+                    <div style="background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                        <h3 style="color: #dc2626; margin: 0 0 15px 0; font-size: 18px;">📋 Application Details</h3>
+                        <ul style="color: #4b5563; margin: 0; padding-left: 20px; line-height: 1.6;">
+                            <li><strong>Applicant:</strong> ${applicationData.applicantName}</li>
+                            <li><strong>Vehicle:</strong> ${applicationData.vehicleInfo}</li>
+                            <li><strong>Application ID:</strong> ${applicationData.id}</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Message -->
+                    <div style="background: #ffffff; border: 2px solid #3b82f6; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                        <h3 style="color: #3b82f6; margin: 0 0 15px 0; font-size: 18px;">👨‍💼 Message from ${adminNote.createdByName}</h3>
+                        <div style="padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #dc2626;">
+                            <p style="margin: 0; color: #1f2937; line-height: 1.5;">${adminNote.content}</p>
+                        </div>
+                        <p style="margin: 12px 0 0 0; font-size: 12px; color: #6b7280;">
+                            📅 Sent: ${new Date(adminNote.timestamp).toLocaleString()}
+                        </p>
+                    </div>
+                    
+                    <!-- Call to Action -->
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <a href="${process.env.FRONTEND_URL || 'https://yoursite.com'}/deal-jacket.html?id=${applicationData.id}" 
+                           style="display: inline-block; background: #dc2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                            💬 View & Reply
+                        </a>
+                    </div>
+                    
+                    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin-bottom: 0;">
+                        Please log into your dealer dashboard to view the complete conversation history and add your response.
+                    </p>
+                </div>
+                
+                <!-- Footer -->
+                <div style="background: #f9fafb; padding: 20px 30px; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #6b7280; font-size: 12px; margin: 0; text-align: center;">
+                        This is an automated notification from Pinnacle Auto Finance<br>
+                        © ${new Date().getFullYear()} Pinnacle Auto Finance. All rights reserved.
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
     }
 }
 
