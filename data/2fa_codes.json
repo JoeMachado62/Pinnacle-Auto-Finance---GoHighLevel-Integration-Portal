@@ -1,18 +1,4 @@
 {
-  "codes": [
-    {
-      "id": "8e472426-cb57-4411-a891-dae48afe9208",
-      "dealerId": "ee56c306-cc40-4dd9-8e86-ef11b313455a",
-      "code": "398237",
-      "codeType": "login",
-      "email": "joemachado62@live.com",
-      "attempts": 0,
-      "maxAttempts": 3,
-      "used": true,
-      "expiresAt": "2025-07-16T00:14:13.674Z",
-      "createdAt": "2025-07-16T00:04:13.674Z",
-      "usedAt": "2025-07-16T00:04:44.827Z"
-    }
-  ],
-  "lastUpdated": "2025-07-16T00:04:44.827Z"
+  "codes": [],
+  "lastUpdated": "2025-08-06T18:00:00.556Z"
 }

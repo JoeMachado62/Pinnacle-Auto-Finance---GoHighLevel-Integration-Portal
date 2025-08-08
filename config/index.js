@@ -54,6 +54,7 @@ const configValues = {
     GHL_API_BASE_URL: process.env.GHL_API_BASE_URL || 'https://services.leadconnectorhq.com',
     GHL_API_VERSION: process.env.GHL_API_VERSION || '2021-07-28',
     GHL_LOCATION_ID: process.env.GHL_LOCATION_ID,
+    GHL_LOGIN_URL: process.env.GHL_LOGIN_URL || 'https://app.gohighlevel.com',
     
     // GHL Pipeline configuration
     GHL_DEALS_PIPELINE_ID: process.env.GHL_DEALS_PIPELINE_ID,

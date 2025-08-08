@@ -543,8 +543,8 @@
                         <img src="images/submit-new-deal.png" alt="Submit New Deal">
                     </a>
                     
-                    <!-- Premium Tools Link (only shown for premium users) -->
-                    <div id="premiumToolsSection" style="display: none; margin-top: 20px;">
+                    <!-- Premium Tools Link (shown to all users) -->
+                    <div id="premiumToolsSection" style="margin-top: 20px;">
                         <a class="premium-tools-link" onclick="goToPremiumDashboard()">
                             <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 25px; border-radius: 8px; text-align: center; cursor: pointer; transition: transform 0.2s ease;">
                                 <i class="fas fa-rocket" style="margin-right: 10px;"></i>
@@ -693,10 +693,7 @@
                             document.getElementById('dealerAvatar').src = userData.profilePictureUrl;
                         }
                         
-                        // Show premium tools section for premium users
-                        if (userData.subscriptionTier === 'premium') {
-                            document.getElementById('premiumToolsSection').style.display = 'block';
-                        }
+                        // Premium tools section is always visible - behavior changes based on tier
                     }
                 } else {
                     throw new Error('Failed to load profile');
@@ -841,13 +838,121 @@
             window.location.href = '/credit_application.html';
         }
         
-        function goToPremiumDashboard() {
+        async function goToPremiumDashboard() {
             if (!authToken) {
                 alert('Please log in again.');
                 window.location.href = '/login.html';
                 return;
             }
-            window.location.href = '/premium-dashboard.html';
+
+            try {
+                // Get current user data to check subscription tier
+                const userResponse = await fetch('/api/dashboard/profile', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!userResponse.ok) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                const userData = await userResponse.json();
+                console.log('User data received:', userData);
+                
+                if (userData.subscriptionTier === 'premium') {
+                    // Premium user - directly open GHL login popup
+                    console.log('Premium user detected - opening GHL login popup');
+                    await openGHLLoginPopup();
+                } else {
+                    // Basic user - redirect to marketing/upsell page
+                    console.log('Basic user detected - showing premium marketing page');
+                    console.log('Current subscription tier:', userData.subscriptionTier);
+                    console.log('Redirecting to: /premium-marketing.html');
+                    window.location.href = '/premium-marketing.html';
+                }
+                
+            } catch (error) {
+                console.error('Error in premium dashboard navigation:', error);
+                console.log('Falling back to marketing page due to error');
+                // Fallback to marketing page for any errors
+                window.location.href = '/premium-marketing.html';
+            }
+        }
+        
+        async function openGHLLoginPopup() {
+            try {
+                // Get GHL interface URL directly for premium users
+                const response = await fetch('/api/premium/ghl-interface', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('GHL interface data:', data);
+                
+                if (response.ok && data.success) {
+                    // Open GHL login popup immediately
+                    const popup = window.open(
+                        data.ghlUrl,
+                        'ghl-login',
+                        'width=1400,height=900,scrollbars=yes,resizable=yes,location=yes,menubar=no,toolbar=no'
+                    );
+                    
+                    if (popup) {
+                        popup.focus();
+                        showNotification('GoHighLevel login opened in new window', 'success');
+                    } else {
+                        throw new Error('Popup blocked - please allow popups for this site');
+                    }
+                } else if (data.registrationStatus === 'not_registered' || data.registrationStatus === 'pending_approval') {
+                    // Handle registration flow - redirect to premium dashboard
+                    console.log('Premium user needs GHL registration - redirecting to setup');
+                    window.location.href = '/premium-dashboard.html';
+                } else {
+                    throw new Error(data.message || 'Failed to open GHL interface');
+                }
+                
+            } catch (error) {
+                console.error('Error opening GHL popup:', error);
+                showNotification('Error opening GoHighLevel: ' + error.message, 'error');
+                
+                // Fallback - redirect to premium dashboard for setup
+                setTimeout(() => {
+                    window.location.href = '/premium-dashboard.html';
+                }, 2000);
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            // Simple notification system
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 6px;
+                color: white;
+                font-weight: 500;
+                z-index: 10000;
+                max-width: 400px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                ${type === 'success' ? 'background: #28a745;' : 
+                  type === 'error' ? 'background: #dc3545;' : 
+                  'background: #17a2b8;'}
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
         }
 
         // Profile Image Preview Function

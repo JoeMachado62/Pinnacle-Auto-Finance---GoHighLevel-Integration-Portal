@@ -197,7 +197,7 @@ class AuthService {
                 upgradedAt: subscriptionTier === 'premium' ? new Date().toISOString() : null
             };
 
-            // Add GHL integration data for premium tier
+            // Add GHL integration data for premium tier (if provided)
             if (subscriptionTier === 'premium' && ghlUserData) {
                 updates.ghlUserId = ghlUserData.ghlUserId;
                 updates.ghlContactId = ghlUserData.ghlContactId;
@@ -206,10 +206,57 @@ class AuthService {
 
             const updatedDealer = await db.updateDealer(dealerId, updates);
             
+            // Auto-register for GHL if upgrading to premium
+            if (subscriptionTier === 'premium' && !ghlUserData) {
+                try {
+                    const ghlUserService = require('./ghlUserService');
+                    
+                    // Check if this is an existing GHL user by looking for existing GHL user ID
+                    const existingGhlUserId = ghlUserData?.ghlUserId || null;
+                    
+                    await ghlUserService.processPremiumUpgrade(updatedDealer, existingGhlUserId);
+                    logger.info(`Auto-registered dealer ${dealerId} for GHL access`);
+                } catch (ghlError) {
+                    logger.warn(`Failed to auto-register dealer ${dealerId} for GHL:`, ghlError);
+                    // Don't fail the subscription upgrade if GHL registration fails
+                }
+            }
+            
             logger.info(`Dealer ${dealerId} upgraded to ${subscriptionTier} tier`);
             return updatedDealer;
         } catch (error) {
             logger.error('Error updating dealer subscription:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Upgrade dealer to premium with existing GHL user ID
+     */
+    async upgradeToPremiumWithGhlUser(dealerId, ghlUserId) {
+        try {
+            const updates = {
+                subscriptionTier: 'premium',
+                upgradedAt: new Date().toISOString(),
+                ghlUserId: ghlUserId,
+                ghlIntegrationEnabled: true
+            };
+
+            const updatedDealer = await db.updateDealer(dealerId, updates);
+            
+            // Process premium upgrade with existing GHL user ID
+            try {
+                const ghlUserService = require('./ghlUserService');
+                await ghlUserService.processPremiumUpgrade(updatedDealer, ghlUserId);
+                logger.info(`Upgraded existing GHL user ${dealerId} to premium`);
+            } catch (ghlError) {
+                logger.warn(`Failed to process GHL upgrade for existing user ${dealerId}:`, ghlError);
+            }
+            
+            logger.info(`Dealer ${dealerId} upgraded to premium with existing GHL user ${ghlUserId}`);
+            return updatedDealer;
+        } catch (error) {
+            logger.error('Error upgrading dealer to premium with GHL user:', error);
             throw error;
         }
     }

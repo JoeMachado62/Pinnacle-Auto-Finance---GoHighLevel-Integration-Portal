@@ -12,6 +12,7 @@ class DatabaseService {
         this.applicationsFile = path.join(this.dataPath, 'applications.json');
         this.conversationsFile = path.join(this.dataPath, 'conversations.json');
         this.twoFactorCodesFile = path.join(this.dataPath, '2fa_codes.json');
+        this.ghlRegistrationsFile = path.join(this.dataPath, 'ghl_registrations.json');
         
         this.initializeFiles();
     }
@@ -26,6 +27,7 @@ class DatabaseService {
             await this.ensureFileExists(this.applicationsFile, { applications: [] });
             await this.ensureFileExists(this.conversationsFile, { conversations: [] });
             await this.ensureFileExists(this.twoFactorCodesFile, { codes: [] });
+            await this.ensureFileExists(this.ghlRegistrationsFile, { registrations: [] });
             
             logger.info('Database files initialized successfully');
         } catch (error) {
@@ -368,6 +370,102 @@ class DatabaseService {
             };
         } catch (error) {
             logger.error('Error getting database stats:', error);
+            throw error;
+        }
+    }
+
+    // GHL Registration Management
+    async createGhlRegistration(dealerId, registrationData) {
+        try {
+            const data = await this.readFile(this.ghlRegistrationsFile);
+            
+            const registration = {
+                id: this.generateId(),
+                dealerId,
+                email: registrationData.email,
+                firstName: registrationData.firstName,
+                lastName: registrationData.lastName,
+                phone: registrationData.phone,
+                dealerName: registrationData.dealerName,
+                ghlContactId: registrationData.ghlContactId || null,
+                ghlUserId: null,
+                status: 'pending_approval', // pending_approval, approved, active, rejected
+                createdAt: new Date().toISOString(),
+                approvedAt: null,
+                activatedAt: null,
+                approvedBy: null,
+                tempPassword: null,
+                additionalInfo: registrationData.additionalInfo || {}
+            };
+            
+            data.registrations.push(registration);
+            data.lastUpdated = new Date().toISOString();
+            
+            await this.writeFile(this.ghlRegistrationsFile, data);
+            logger.info(`GHL registration created for dealer: ${dealerId}`);
+            
+            return registration;
+        } catch (error) {
+            logger.error('Error creating GHL registration:', error);
+            throw error;
+        }
+    }
+
+    async getGhlRegistrationByDealerId(dealerId) {
+        try {
+            const data = await this.readFile(this.ghlRegistrationsFile);
+            return data.registrations.find(reg => reg.dealerId === dealerId);
+        } catch (error) {
+            logger.error('Error getting GHL registration:', error);
+            throw error;
+        }
+    }
+
+    async updateGhlRegistrationStatus(dealerId, status, updateData = {}) {
+        try {
+            const data = await this.readFile(this.ghlRegistrationsFile);
+            const registrationIndex = data.registrations.findIndex(reg => reg.dealerId === dealerId);
+            
+            if (registrationIndex === -1) {
+                throw new Error('GHL registration not found');
+            }
+            
+            const registration = data.registrations[registrationIndex];
+            registration.status = status;
+            registration.updatedAt = new Date().toISOString();
+            
+            // Add status-specific fields
+            if (status === 'approved') {
+                registration.approvedAt = new Date().toISOString();
+                registration.approvedBy = updateData.approvedBy;
+            }
+            
+            if (status === 'active') {
+                registration.activatedAt = new Date().toISOString();
+                registration.ghlUserId = updateData.ghlUserId;
+                registration.tempPassword = updateData.tempPassword;
+            }
+            
+            // Add any other update data
+            Object.assign(registration, updateData);
+            
+            data.lastUpdated = new Date().toISOString();
+            await this.writeFile(this.ghlRegistrationsFile, data);
+            
+            logger.info(`GHL registration status updated to ${status} for dealer: ${dealerId}`);
+            return registration;
+        } catch (error) {
+            logger.error('Error updating GHL registration status:', error);
+            throw error;
+        }
+    }
+
+    async getAllPendingGhlRegistrations() {
+        try {
+            const data = await this.readFile(this.ghlRegistrationsFile);
+            return data.registrations.filter(reg => reg.status === 'pending_approval');
+        } catch (error) {
+            logger.error('Error getting pending GHL registrations:', error);
             throw error;
         }
     }

@@ -5,6 +5,7 @@ const { authenticateAdmin, requirePermission, logSecurityEvent } = require('../m
 const db = require('../services/databaseService');
 const authService = require('../services/authService');
 const emailService = require('../services/emailService');
+const ghlUserService = require('../services/ghlUserService');
 const { logger, logBusiness, logSecurity } = require('../utils/logger');
 
 // Utility functions
@@ -534,6 +535,187 @@ router.get('/stats',
             res.status(500).json({
                 success: false,
                 message: 'Failed to fetch system statistics'
+            });
+        }
+    }
+);
+
+// ===== GHL REGISTRATION MANAGEMENT =====
+
+// Get all pending GHL registrations
+router.get('/ghl-registrations/pending',
+    authenticateAdmin,
+    requirePermission('access_admin_panel'),
+    async (req, res) => {
+        try {
+            const pendingRegistrations = await ghlUserService.getPendingRegistrations();
+            
+            // Enrich with dealer information
+            const enrichedRegistrations = await Promise.all(
+                pendingRegistrations.map(async (registration) => {
+                    const dealer = await db.getDealerById(registration.dealerId);
+                    return {
+                        ...registration,
+                        dealerInfo: dealer ? {
+                            id: dealer.id,
+                            dealerName: dealer.dealerName,
+                            contactName: dealer.contactName,
+                            subscriptionTier: dealer.subscriptionTier,
+                            status: dealer.status
+                        } : null
+                    };
+                })
+            );
+            
+            logBusiness('Admin viewed pending GHL registrations', {
+                adminId: req.user.id,
+                count: pendingRegistrations.length
+            });
+            
+            res.json({
+                success: true,
+                data: enrichedRegistrations,
+                count: enrichedRegistrations.length
+            });
+        } catch (error) {
+            logger.error('Error getting pending GHL registrations:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch pending GHL registrations'
+            });
+        }
+    }
+);
+
+// Approve GHL registration
+router.post('/ghl-registrations/:dealerId/approve',
+    authenticateAdmin,
+    requirePermission('manage_dealer_accounts'),
+    async (req, res) => {
+        try {
+            const { dealerId } = req.params;
+            const adminId = req.user.id;
+            const adminName = req.user.contactName || req.user.dealerName || 'Administrator';
+            
+            logger.info(`Admin ${adminName} approving GHL registration for dealer: ${dealerId}`);
+            
+            // Approve the registration and create GHL user account
+            const result = await ghlUserService.approveGhlRegistration(dealerId, adminName);
+            
+            logSecurity('Admin approved GHL registration', {
+                adminId,
+                adminName,
+                dealerId,
+                ghlUserId: result.ghlUserId,
+                registrationId: result.registration.id,
+                ip: getClientIP(req)
+            });
+            
+            res.json({
+                success: true,
+                message: 'GHL registration approved and user account created',
+                data: {
+                    registrationId: result.registration.id,
+                    ghlUserId: result.ghlUserId,
+                    status: result.registration.status
+                }
+            });
+        } catch (error) {
+            logger.error('Error approving GHL registration:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to approve GHL registration',
+                error: error.message
+            });
+        }
+    }
+);
+
+// Reject GHL registration
+router.post('/ghl-registrations/:dealerId/reject',
+    authenticateAdmin,
+    requirePermission('manage_dealer_accounts'),
+    async (req, res) => {
+        try {
+            const { dealerId } = req.params;
+            const { reason = 'Registration rejected by admin' } = req.body;
+            const adminId = req.user.id;
+            const adminName = req.user.contactName || req.user.dealerName || 'Administrator';
+            
+            logger.info(`Admin ${adminName} rejecting GHL registration for dealer: ${dealerId}`);
+            
+            // Update registration status to rejected
+            const registration = await db.updateGhlRegistrationStatus(dealerId, 'rejected', {
+                rejectedBy: adminName,
+                rejectionReason: reason,
+                rejectedAt: new Date().toISOString()
+            });
+            
+            logSecurity('Admin rejected GHL registration', {
+                adminId,
+                adminName,
+                dealerId,
+                registrationId: registration.id,
+                reason,
+                ip: getClientIP(req)
+            });
+            
+            res.json({
+                success: true,
+                message: 'GHL registration rejected',
+                data: {
+                    registrationId: registration.id,
+                    status: registration.status,
+                    reason
+                }
+            });
+        } catch (error) {
+            logger.error('Error rejecting GHL registration:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to reject GHL registration',
+                error: error.message
+            });
+        }
+    }
+);
+
+// Get GHL registration details
+router.get('/ghl-registrations/:dealerId',
+    authenticateAdmin,
+    requirePermission('access_admin_panel'),
+    async (req, res) => {
+        try {
+            const { dealerId } = req.params;
+            
+            const registration = await db.getGhlRegistrationByDealerId(dealerId);
+            if (!registration) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'GHL registration not found'
+                });
+            }
+            
+            const dealer = await db.getDealerById(dealerId);
+            
+            res.json({
+                success: true,
+                data: {
+                    ...registration,
+                    dealerInfo: dealer ? {
+                        id: dealer.id,
+                        dealerName: dealer.dealerName,
+                        contactName: dealer.contactName,
+                        subscriptionTier: dealer.subscriptionTier,
+                        status: dealer.status
+                    } : null
+                }
+            });
+        } catch (error) {
+            logger.error('Error getting GHL registration details:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch GHL registration details'
             });
         }
     }

@@ -407,9 +407,259 @@ async function createGhlDealerContact(dealerData) {
     }
 }
 
+// GHL User Account Management
+const crypto = require('crypto');
+
+function generateSecurePassword(length = 12) {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += characters.charAt(crypto.randomInt(0, characters.length));
+    }
+    return result;
+}
+
+async function createGhlUserAccount(dealerData) {
+    // Validate required Agency API credentials for user creation
+    if (!config.GHL_AGENCY_API_KEY || !config.GHL_COMPANY_ID || !config.GHL_LOCATION_ID) {
+        logger.error('createGhlUserAccount: GHL_AGENCY_API_KEY, GHL_COMPANY_ID, or GHL_LOCATION_ID is not configured.');
+        throw new Error('GHL Agency API Key, Company ID, or Location ID is not configured for user creation.');
+    }
+
+    // Check if user already exists by email
+    try {
+        const existingUser = await getUserByEmail(dealerData.email);
+        if (existingUser) {
+            logger.info(`GHL user already exists: ${dealerData.email}`);
+            return existingUser;
+        }
+    } catch (error) {
+        // User doesn't exist, continue with creation
+        logger.debug('User lookup failed, proceeding with creation');
+    }
+
+    // Generate secure password
+    const password = generateSecurePassword();
+
+    // Create Agency API axios instance for user management
+    const agencyApi = axios.create({
+        baseURL: config.GHL_API_BASE_URL,
+        headers: {
+            'Authorization': `Bearer ${config.GHL_AGENCY_API_KEY}`,
+            'Version': config.GHL_API_VERSION,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        timeout: 15000,
+    });
+
+    // Prepare user data with restricted permissions for dealers
+    const userData = {
+        firstName: dealerData.firstName,
+        lastName: dealerData.lastName,
+        email: dealerData.email,
+        phone: dealerData.phone,
+        password: password,
+        type: 'account', // Type of user account
+        role: 'user',    // Role within the system
+        locationIds: [config.GHL_LOCATION_ID], // Assign to specific location
+        permissions: {
+            // Core permissions for dealer users
+            contactsEnabled: true,           // View and manage contacts
+            conversationsEnabled: true,      // Communicate with contacts  
+            opportunitiesEnabled: true,      // Manage deals/opportunities
+            appointmentsEnabled: true,       // Schedule appointments
+            dashboardStatsEnabled: true,     // View performance dashboard
+            assignedDataOnly: true,          // CRITICAL: Only see assigned data
+            
+            // Restricted permissions for security
+            campaignsEnabled: false,         // No campaign creation
+            workflowsEnabled: false,         // No automation workflows
+            triggersEnabled: false,          // No trigger management
+            funnelsEnabled: false,           // No funnel access
+            websitesEnabled: false,          // No website builder
+            settingsEnabled: false,          // No system settings
+            marketingEnabled: false,         // No marketing tools
+            paymentsEnabled: false,          // No payment processing
+            bulkRequestsEnabled: false,      // No bulk operations
+            exportPaymentsEnabled: false     // No payment exports
+        }
+    };
+
+    logger.info('Attempting to create GHL User Account using Agency API.');
+    logger.debug('GHL User Account Payload:', JSON.stringify({
+        ...userData,
+        password: 'REDACTED_FOR_SECURITY'
+    }, null, 2));
+
+    try {
+        // Use Agency API for user creation (supports both V1 and V2 formats)
+        let response;
+        try {
+            // Try V2 Agency API endpoint first
+            response = await agencyApi.post('/users/', userData);
+            logger.debug('V2 Agency API user creation successful');
+        } catch (v2Error) {
+            logger.warn('V2 Agency API failed, trying V1 format', v2Error.response?.data);
+            
+            // Fallback to V1 Agency API format
+            const v1UserData = {
+                ...userData,
+                companyId: config.GHL_COMPANY_ID,
+                locationId: config.GHL_LOCATION_ID
+            };
+            
+            try {
+                response = await agencyApi.post(`/companies/${config.GHL_COMPANY_ID}/locations/${config.GHL_LOCATION_ID}/users`, v1UserData);
+                logger.debug('V1 Agency API user creation successful');
+            } catch (v1Error) {
+                logger.error('Both V2 and V1 Agency API calls failed', {
+                    v2Error: v2Error.response?.data,
+                    v1Error: v1Error.response?.data
+                });
+                throw v1Error;
+            }
+        }
+
+        const createdUser = response.data.user || response.data;
+        if (!createdUser || !createdUser.id) {
+            throw new Error('GHL Agency API returned success but no user ID found');
+        }
+
+        logger.info(`GHL User Account created successfully using Agency API. ID: ${createdUser.id}`);
+        
+        // Return user data with temporary password for welcome email
+        return {
+            ...createdUser,
+            tempPassword: password
+        };
+    } catch (error) {
+        const errorDetails = {
+            message: error.message,
+            url: error.config?.url,
+            status: error.response?.status,
+            ghlErrors: error.response?.data?.errors || error.response?.data?.message || error.response?.data,
+            apiType: 'Agency API'
+        };
+        
+        logger.error('Error creating GHL user account with Agency API:', errorDetails);
+        throw new Error(`Failed to create GHL user account using Agency API. Status: ${error.response?.status}. Response: ${JSON.stringify(error.response?.data)}`);
+    }
+}
+
+async function getUserByEmail(email) {
+    try {
+        // Search for existing user by email
+        const response = await ghlApi.get(`/users/`, {
+            params: {
+                locationId: config.GHL_LOCATION_ID,
+                email: email
+            }
+        });
+        
+        if (response.data && response.data.users && response.data.users.length > 0) {
+            return response.data.users.find(user => user.email.toLowerCase() === email.toLowerCase());
+        }
+        
+        return null;
+    } catch (error) {
+        logger.debug('Error searching for user by email:', error.response?.data);
+        return null;
+    }
+}
+
+async function updateContactWithUserId(contactId, ghlUserId) {
+    if (!config.GHL_API_KEY || !config.GHL_LOCATION_ID) {
+        logger.error('updateContactWithUserId: GHL_API_KEY or GHL_LOCATION_ID is not configured.');
+        throw new Error('GHL API Key or Location ID is not configured.');
+    }
+
+    const updatePayload = {
+        customFields: [
+            {
+                key: "ghl_user_id",
+                value: ghlUserId
+            },
+            {
+                key: "registration_status", 
+                value: "active"
+            },
+            {
+                key: "activation_date",
+                value: new Date().toISOString()
+            }
+        ],
+        tags: ["dealer_active", "ghl_user_created"]
+    };
+
+    try {
+        // Remove pending tag and add active tags
+        await ghlApi.delete(`/contacts/${contactId}/tags/registration_pending`);
+        
+        // Update contact with user ID
+        const response = await ghlApi.put(`/contacts/${contactId}`, updatePayload);
+        logger.info(`Contact ${contactId} updated with GHL user ID ${ghlUserId}`);
+        
+        return response.data;
+    } catch (error) {
+        logger.error('Error updating contact with user ID:', {
+            contactId,
+            ghlUserId,
+            error: error.response?.data
+        });
+        throw error;
+    }
+}
+
+// Auto-register premium users as GHL contacts when they upgrade
+async function autoRegisterPremiumUser(dealerData) {
+    try {
+        logger.info(`Auto-registering premium user: ${dealerData.email}`);
+        
+        // Create GHL contact first
+        const ghlContactId = await createGhlDealerContact(dealerData);
+        
+        // Create registration record
+        const db = require('./databaseService');
+        const registrationData = {
+            email: dealerData.email,
+            firstName: dealerData.dealer_first_name || dealerData.contactName?.split(' ')[0] || 'Dealer',
+            lastName: dealerData.dealer_last_name || dealerData.contactName?.split(' ').slice(1).join(' ') || 'User',
+            phone: dealerData.phone,
+            dealerName: dealerData.dealerName,
+            ghlContactId: ghlContactId,
+            additionalInfo: {
+                dealerLicenseNumber: dealerData.dealerLicenseNumber,
+                address: dealerData.address,
+                subscriptionTier: dealerData.subscriptionTier
+            }
+        };
+        
+        const registration = await db.createGhlRegistration(dealerData.id, registrationData);
+        
+        logger.info(`Premium user auto-registration completed: ${dealerData.email}`, {
+            registrationId: registration.id,
+            ghlContactId: ghlContactId
+        });
+        
+        return {
+            registration,
+            ghlContactId
+        };
+    } catch (error) {
+        logger.error('Error auto-registering premium user:', error);
+        throw error;
+    }
+}
+
 console.log('[DEBUG] Exiting TOP LEVEL of services/ghlApiService.js - Map processed, functions defined.'); // ADD THIS
 module.exports = {
     createGhlContact,
     createGhlDealerContact,
     createGhlOpportunity,
+    createGhlUserAccount,
+    getUserByEmail,
+    updateContactWithUserId,
+    autoRegisterPremiumUser,
+    generateSecurePassword
 };
