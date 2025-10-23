@@ -18,7 +18,10 @@
     "postinstall": "npm run setup"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.67.0",
+    "@browserbasehq/mcp-server-browserbase": "^2.2.0",
     "axios": "^1.7.2",
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -51,7 +54,7 @@
   },
   "keywords": [
     "auto-finance",
-    "dealer-portal", 
+    "dealer-portal",
     "credit-applications",
     "dealertrack",
     "gohighlevel",

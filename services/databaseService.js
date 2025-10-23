@@ -13,7 +13,10 @@ class DatabaseService {
         this.conversationsFile = path.join(this.dataPath, 'conversations.json');
         this.twoFactorCodesFile = path.join(this.dataPath, '2fa_codes.json');
         this.ghlRegistrationsFile = path.join(this.dataPath, 'ghl_registrations.json');
-        
+        this.submissionsFile = path.join(this.dataPath, 'submissions.json');
+        this.clientsFile = path.join(this.dataPath, 'clients.json');
+        this.lendersFile = path.join(this.dataPath, 'lenders.json');
+
         this.initializeFiles();
     }
 
@@ -28,6 +31,9 @@ class DatabaseService {
             await this.ensureFileExists(this.conversationsFile, { conversations: [] });
             await this.ensureFileExists(this.twoFactorCodesFile, { codes: [] });
             await this.ensureFileExists(this.ghlRegistrationsFile, { registrations: [] });
+            await this.ensureFileExists(this.submissionsFile, { submissions: [] });
+            await this.ensureFileExists(this.clientsFile, { clients: [] });
+            await this.ensureFileExists(this.lendersFile, { lenders: [] });
             
             logger.info('Database files initialized successfully');
         } catch (error) {
@@ -489,6 +495,397 @@ class DatabaseService {
             logger.error('Error during database cleanup:', error);
             return false;
         }
+    }
+
+    // ===== SUBMISSION TRACKING METHODS =====
+
+    async createSubmission(submissionData) {
+        const data = await this.readFile(this.submissionsFile);
+        const submission = {
+            id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            dealerId: submissionData.dealerId,
+            applicationId: submissionData.applicationId,
+            lenderUrl: submissionData.lenderUrl,
+            lenderName: submissionData.lenderName || null,
+            status: submissionData.status || 'pending', // pending, submitted, approved, declined, error
+            errorMessage: submissionData.errorMessage || null,
+            automationPlan: submissionData.automationPlan || null,
+            sessionId: submissionData.sessionId || null,
+            userInterventions: submissionData.userInterventions || 0,
+            submittedAt: submissionData.submittedAt || new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        data.submissions.push(submission);
+        await this.writeFile(this.submissionsFile, data);
+
+        logger.info(`Submission created: ${submission.id} for application ${submissionData.applicationId}`);
+        return submission;
+    }
+
+    async getSubmissionById(id) {
+        const data = await this.readFile(this.submissionsFile);
+        return data.submissions.find(s => s.id === id);
+    }
+
+    async getSubmissionsByDealer(dealerId, options = {}) {
+        const data = await this.readFile(this.submissionsFile);
+        let submissions = data.submissions.filter(s => s.dealerId === dealerId);
+
+        // Filter by status if provided
+        if (options.status) {
+            submissions = submissions.filter(s => s.status === options.status);
+        }
+
+        // Filter by application if provided
+        if (options.applicationId) {
+            submissions = submissions.filter(s => s.applicationId === options.applicationId);
+        }
+
+        // Sort by most recent first
+        submissions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Pagination
+        const limit = options.limit || 50;
+        const offset = options.offset || 0;
+
+        return {
+            submissions: submissions.slice(offset, offset + limit),
+            total: submissions.length,
+            hasMore: submissions.length > offset + limit
+        };
+    }
+
+    async updateSubmissionStatus(id, status, additionalData = {}) {
+        const data = await this.readFile(this.submissionsFile);
+        const submission = data.submissions.find(s => s.id === id);
+
+        if (!submission) {
+            throw new Error('Submission not found');
+        }
+
+        submission.status = status;
+        submission.updatedAt = new Date().toISOString();
+
+        // Update additional fields if provided
+        if (additionalData.errorMessage) {
+            submission.errorMessage = additionalData.errorMessage;
+        }
+        if (additionalData.submittedAt) {
+            submission.submittedAt = additionalData.submittedAt;
+        }
+        if (additionalData.userInterventions !== undefined) {
+            submission.userInterventions = additionalData.userInterventions;
+        }
+
+        await this.writeFile(this.submissionsFile, data);
+
+        logger.info(`Submission ${id} status updated to: ${status}`);
+        return submission;
+    }
+
+    async incrementUserInterventions(id) {
+        const data = await this.readFile(this.submissionsFile);
+        const submission = data.submissions.find(s => s.id === id);
+
+        if (!submission) {
+            throw new Error('Submission not found');
+        }
+
+        submission.userInterventions = (submission.userInterventions || 0) + 1;
+        submission.updatedAt = new Date().toISOString();
+
+        await this.writeFile(this.submissionsFile, data);
+
+        return submission;
+    }
+
+    async deleteSubmission(id) {
+        const data = await this.readFile(this.submissionsFile);
+        const initialLength = data.submissions.length;
+
+        data.submissions = data.submissions.filter(s => s.id !== id);
+
+        if (data.submissions.length === initialLength) {
+            throw new Error('Submission not found');
+        }
+
+        await this.writeFile(this.submissionsFile, data);
+
+        logger.info(`Submission deleted: ${id}`);
+        return true;
+    }
+
+    async getSubmissionStats(dealerId) {
+        const data = await this.readFile(this.submissionsFile);
+        const submissions = data.submissions.filter(s => s.dealerId === dealerId);
+
+        const stats = {
+            total: submissions.length,
+            pending: submissions.filter(s => s.status === 'pending').length,
+            submitted: submissions.filter(s => s.status === 'submitted').length,
+            approved: submissions.filter(s => s.status === 'approved').length,
+            declined: submissions.filter(s => s.status === 'declined').length,
+            error: submissions.filter(s => s.status === 'error').length,
+            averageInterventions: submissions.length > 0
+                ? submissions.reduce((sum, s) => sum + (s.userInterventions || 0), 0) / submissions.length
+                : 0,
+            recentSubmissions: submissions
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .slice(0, 10)
+        };
+
+        return stats;
+    }
+
+    // ===== CLIENT METHODS =====
+
+    async createClient(clientData) {
+        const data = await this.readFile(this.clientsFile);
+
+        // Check for existing client with same email
+        const existingClient = data.clients.find(c => c.email === clientData.email);
+        if (existingClient) {
+            throw new Error('Client with this email already exists');
+        }
+
+        const client = {
+            id: this.generateId(),
+            email: clientData.email,
+            passwordHash: clientData.passwordHash,
+            firstName: clientData.firstName,
+            lastName: clientData.lastName,
+            phone: clientData.phone,
+            dealerId: clientData.dealerId,
+            gmailAppPassword: clientData.gmailAppPassword || null, // Encrypted
+            createdAt: new Date().toISOString(),
+            lastLogin: null,
+            status: 'active'
+        };
+
+        data.clients.push(client);
+        await this.writeFile(this.clientsFile, data);
+        logger.info('Client created', { clientId: client.id, email: client.email });
+
+        return client;
+    }
+
+    async getClientByEmail(email) {
+        const data = await this.readFile(this.clientsFile);
+        return data.clients.find(c => c.email === email);
+    }
+
+    async getClientById(id) {
+        const data = await this.readFile(this.clientsFile);
+        return data.clients.find(c => c.id === id);
+    }
+
+    async getClientsByDealer(dealerId) {
+        const data = await this.readFile(this.clientsFile);
+        return data.clients.filter(c => c.dealerId === dealerId);
+    }
+
+    async updateClient(id, updates) {
+        const data = await this.readFile(this.clientsFile);
+        const clientIndex = data.clients.findIndex(c => c.id === id);
+
+        if (clientIndex === -1) {
+            throw new Error('Client not found');
+        }
+
+        // Don't allow email changes if it conflicts with another client
+        if (updates.email && updates.email !== data.clients[clientIndex].email) {
+            const emailExists = data.clients.some(c => c.email === updates.email && c.id !== id);
+            if (emailExists) {
+                throw new Error('Email already in use by another client');
+            }
+        }
+
+        data.clients[clientIndex] = {
+            ...data.clients[clientIndex],
+            ...updates,
+            id, // Ensure ID doesn't change
+            updatedAt: new Date().toISOString()
+        };
+
+        await this.writeFile(this.clientsFile, data);
+        logger.info('Client updated', { clientId: id });
+
+        return data.clients[clientIndex];
+    }
+
+    async deleteClient(id) {
+        const data = await this.readFile(this.clientsFile);
+        const initialLength = data.clients.length;
+        data.clients = data.clients.filter(c => c.id !== id);
+
+        if (data.clients.length === initialLength) {
+            throw new Error('Client not found');
+        }
+
+        await this.writeFile(this.clientsFile, data);
+        logger.info('Client deleted', { clientId: id });
+
+        return true;
+    }
+
+    async updateClientLastLogin(id) {
+        const data = await this.readFile(this.clientsFile);
+        const clientIndex = data.clients.findIndex(c => c.id === id);
+
+        if (clientIndex === -1) {
+            throw new Error('Client not found');
+        }
+
+        data.clients[clientIndex].lastLogin = new Date().toISOString();
+        await this.writeFile(this.clientsFile, data);
+
+        return data.clients[clientIndex];
+    }
+
+    // ===== LENDER METHODS =====
+
+    async createLender(lenderData) {
+        const data = await this.readFile(this.lendersFile);
+
+        const lender = {
+            id: this.generateId(),
+            name: lenderData.name,
+            url: lenderData.url,
+            category: lenderData.category || 'bank', // 'bank' | 'credit_union' | 'specialty'
+            dealerId: lenderData.dealerId || null, // null = global lender
+            active: lenderData.active !== false, // Default true
+            successRate: 0,
+            avgResponseTimeDays: 0,
+            totalSubmissions: 0,
+            approvalCount: 0,
+            declineCount: 0,
+            createdAt: new Date().toISOString()
+        };
+
+        data.lenders.push(lender);
+        await this.writeFile(this.lendersFile, data);
+        logger.info('Lender created', { lenderId: lender.id, name: lender.name });
+
+        return lender;
+    }
+
+    async getLenderById(id) {
+        const data = await this.readFile(this.lendersFile);
+        return data.lenders.find(l => l.id === id);
+    }
+
+    async getLendersByDealer(dealerId) {
+        const data = await this.readFile(this.lendersFile);
+        // Return both global lenders (dealerId === null) and dealer-specific lenders
+        return data.lenders.filter(l => l.dealerId === null || l.dealerId === dealerId);
+    }
+
+    async getAllLenders() {
+        const data = await this.readFile(this.lendersFile);
+        return data.lenders;
+    }
+
+    async getActiveLenders(dealerId = null) {
+        const data = await this.readFile(this.lendersFile);
+        let lenders = data.lenders.filter(l => l.active === true);
+
+        if (dealerId) {
+            lenders = lenders.filter(l => l.dealerId === null || l.dealerId === dealerId);
+        }
+
+        return lenders;
+    }
+
+    async updateLender(id, updates) {
+        const data = await this.readFile(this.lendersFile);
+        const lenderIndex = data.lenders.findIndex(l => l.id === id);
+
+        if (lenderIndex === -1) {
+            throw new Error('Lender not found');
+        }
+
+        data.lenders[lenderIndex] = {
+            ...data.lenders[lenderIndex],
+            ...updates,
+            id, // Ensure ID doesn't change
+            updatedAt: new Date().toISOString()
+        };
+
+        await this.writeFile(this.lendersFile, data);
+        logger.info('Lender updated', { lenderId: id });
+
+        return data.lenders[lenderIndex];
+    }
+
+    async deleteLender(id) {
+        const data = await this.readFile(this.lendersFile);
+        const initialLength = data.lenders.length;
+        data.lenders = data.lenders.filter(l => l.id !== id);
+
+        if (data.lenders.length === initialLength) {
+            throw new Error('Lender not found');
+        }
+
+        await this.writeFile(this.lendersFile, data);
+        logger.info('Lender deleted', { lenderId: id });
+
+        return true;
+    }
+
+    async updateLenderStats(id, submissionOutcome) {
+        const data = await this.readFile(this.lendersFile);
+        const lenderIndex = data.lenders.findIndex(l => l.id === id);
+
+        if (lenderIndex === -1) {
+            throw new Error('Lender not found');
+        }
+
+        const lender = data.lenders[lenderIndex];
+
+        // Increment totals
+        lender.totalSubmissions = (lender.totalSubmissions || 0) + 1;
+
+        if (submissionOutcome === 'approved') {
+            lender.approvalCount = (lender.approvalCount || 0) + 1;
+        } else if (submissionOutcome === 'declined') {
+            lender.declineCount = (lender.declineCount || 0) + 1;
+        }
+
+        // Calculate success rate (approvals / total non-pending submissions)
+        const decisiveSubmissions = lender.approvalCount + lender.declineCount;
+        if (decisiveSubmissions > 0) {
+            lender.successRate = (lender.approvalCount / decisiveSubmissions) * 100;
+        }
+
+        await this.writeFile(this.lendersFile, data);
+        logger.info('Lender stats updated', { lenderId: id, outcome: submissionOutcome });
+
+        return data.lenders[lenderIndex];
+    }
+
+    async getLenderStats(dealerId = null) {
+        const data = await this.readFile(this.lendersFile);
+        let lenders = data.lenders;
+
+        if (dealerId) {
+            lenders = lenders.filter(l => l.dealerId === null || l.dealerId === dealerId);
+        }
+
+        // Sort by success rate descending
+        lenders.sort((a, b) => (b.successRate || 0) - (a.successRate || 0));
+
+        const stats = {
+            totalLenders: lenders.length,
+            activeLenders: lenders.filter(l => l.active).length,
+            topPerformers: lenders.slice(0, 5),
+            averageSuccessRate: lenders.length > 0
+                ? lenders.reduce((sum, l) => sum + (l.successRate || 0), 0) / lenders.length
+                : 0
+        };
+
+        return stats;
     }
 }
 

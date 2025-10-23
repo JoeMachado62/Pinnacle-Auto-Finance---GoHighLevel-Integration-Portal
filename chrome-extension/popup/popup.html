@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Fill Agent</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <img src="../assets/icon-48.png" alt="Auto Fill Logo" class="logo">
+            <h1>Auto Fill Agent</h1>
+        </div>
+
+        <!-- Authentication Section -->
+        <div id="auth-section" class="section">
+            <h2>Login to Your Portal</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+            <p class="error-message" id="auth-error"></p>
+        </div>
+
+        <!-- Main Section (shown after login) -->
+        <div id="main-section" class="section hidden">
+            <!-- User Info -->
+            <div class="user-info">
+                <span id="user-name">Loading...</span>
+                <button id="logout-btn" class="btn btn-text">Logout</button>
+            </div>
+
+            <!-- Application Selection -->
+            <div class="application-selector">
+                <h2>Select Application</h2>
+                <input type="text" id="search-applications" placeholder="Search applications...">
+                <div id="applications-list" class="applications-list">
+                    <!-- Applications will be dynamically loaded here -->
+                    <p class="loading">Loading applications...</p>
+                </div>
+            </div>
+
+            <!-- Selected Application Details -->
+            <div id="selected-application" class="selected-app hidden">
+                <h3>Selected Application</h3>
+                <div class="app-details">
+                    <p><strong>Applicant:</strong> <span id="app-name"></span></p>
+                    <p><strong>Application ID:</strong> <span id="app-id"></span></p>
+                    <p><strong>Status:</strong> <span id="app-status"></span></p>
+                </div>
+                <button id="start-autofill-btn" class="btn btn-success">Start Autofill</button>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="progress-section" class="progress-section hidden">
+                <h3>Autofill in Progress</h3>
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <p id="progress-status">Initializing...</p>
+                <button id="pause-btn" class="btn btn-warning">Pause</button>
+                <button id="cancel-btn" class="btn btn-danger">Cancel</button>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="status-messages" class="status-messages">
+                <!-- Status updates will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

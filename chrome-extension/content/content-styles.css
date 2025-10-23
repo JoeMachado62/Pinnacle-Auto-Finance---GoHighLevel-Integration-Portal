@@ -1,0 +1,60 @@
+/* content/content-styles.css */
+/* Styles for content script notifications and overlays */
+
+#pinnacle-autofill-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 999999;
+    max-width: 400px;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.pinnacle-notification.pinnacle-info {
+    background: #dbeafe;
+    color: #1e40af;
+    border-left: 4px solid #3b82f6;
+}
+
+.pinnacle-notification.pinnacle-success {
+    background: #d1fae5;
+    color: #065f46;
+    border-left: 4px solid #10b981;
+}
+
+.pinnacle-notification.pinnacle-warning {
+    background: #fef3c7;
+    color: #92400e;
+    border-left: 4px solid #f59e0b;
+}
+
+.pinnacle-notification.pinnacle-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border-left: 4px solid #ef4444;
+}
+
+/* Highlight element being interacted with */
+.pinnacle-highlight {
+    outline: 3px solid #3b82f6 !important;
+    outline-offset: 2px;
+    background-color: rgba(59, 130, 246, 0.1) !important;
+    transition: all 0.3s ease;
+}

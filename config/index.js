@@ -68,6 +68,13 @@ const configValues = {
     GHL_AGENCY_API_KEY: process.env.GHL_AGENCY_API_KEY,
     GHL_COMPANY_ID: process.env.GHL_COMPANY_ID,
     GHL_PRIVATE_TOKEN: process.env.GHL_PRIVATE_TOKEN, // V2 API fallback
+
+    // Claude API for Autofill Agent
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+
+    // BrowserBase API for browser automation
+    BROWSERBASE_API_KEY: process.env.BROWSERBASE_API_KEY,
+    BROWSERBASE_PROJECT_ID: process.env.BROWSERBASE_PROJECT_ID,
     
     // DealerTrack configuration
     DEALERTRACK_QUEUE_POLL_INTERVAL: parseInt(process.env.DEALERTRACK_QUEUE_POLL_INTERVAL) || 30000, // 30 seconds

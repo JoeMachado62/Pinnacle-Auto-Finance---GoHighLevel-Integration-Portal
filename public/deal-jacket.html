@@ -120,7 +120,7 @@
 
         .deal-content {
             display: grid;
-            grid-template-columns: 1fr 400px;
+            grid-template-columns: 2fr 1fr;
             gap: 20px;
         }
 
@@ -150,6 +150,52 @@
             color: var(--dark-text);
             border-bottom: 2px solid var(--light-red);
             padding-bottom: 8px;
+        }
+        /* New visual styles to match the mock */
+        .section-banner {
+            background: var(--primary-red);
+            color: #fff;
+            padding: 10px 16px;
+            margin: -20px -20px 15px -20px;
+            border-radius: 8px 8px 0 0;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .status-strip {
+            background: #fff;
+            border-radius: 8px;
+            padding: 12px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .table-grid {
+            display: grid;
+            grid-template-columns: 220px 1fr 1fr;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .table-row { display: contents; }
+        .table-cell {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+        .table-row:last-child .table-cell { border-bottom: none; }
+        .table-header .table-cell {
+            background: var(--light-bg);
+            color: var(--dark-text);
+            font-weight: 700;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .table-label {
+            color: var(--light-text);
+            font-weight: 600;
+            background: #fff;
         }
 
         .info-grid {
@@ -203,7 +249,15 @@
         }
 
         .progress-step.active:not(:last-child)::after {
+            background: var(--success-color);
+        }
+
+        .progress-step.active.deal-submitted:not(:last-child)::after {
             background: var(--primary-red);
+        }
+
+        .progress-step.completed:not(:last-child)::after {
+            background: #90EE90;
         }
 
         .progress-icon {
@@ -223,11 +277,15 @@
         }
 
         .progress-step.active .progress-icon {
+            background: var(--success-color);
+        }
+
+        .progress-step.active.deal-submitted .progress-icon {
             background: var(--primary-red);
         }
 
         .progress-step.completed .progress-icon {
-            background: var(--success-color);
+            background: #90EE90;
         }
 
         .progress-label {
@@ -237,6 +295,11 @@
         }
 
         .progress-step.active .progress-label {
+            color: var(--success-color);
+            font-weight: 600;
+        }
+
+        .progress-step.active.deal-submitted .progress-label {
             color: var(--primary-red);
             font-weight: 600;
         }
@@ -450,7 +513,17 @@
                 { name: 'Deal Funded', key: 'Deal Funded' }
             ];
 
-            const currentIndex = stages.findIndex(stage => stage.key === currentStatus);
+            let currentIndex = stages.findIndex(stage => stage.key === currentStatus);
+            
+            // Debug logging
+            console.log('Progress bar - Current status:', currentStatus);
+            console.log('Progress bar - Current index:', currentIndex);
+            
+            // If status not found, default to first stage (Deal Submitted)
+            if (currentIndex === -1) {
+                currentIndex = 0;
+                console.log('Progress bar - Status not found, defaulting to index 0');
+            }
             
             return `
                 <div class="progress-container">
@@ -458,7 +531,12 @@
                         ${stages.map((stage, index) => {
                             let stepClass = '';
                             if (index < currentIndex) stepClass = 'completed';
-                            else if (index === currentIndex) stepClass = 'active';
+                            else if (index === currentIndex) {
+                                stepClass = 'active';
+                                if (stage.name === 'Deal Submitted') {
+                                    stepClass += ' deal-submitted';
+                                }
+                            }
                             
                             return `
                                 <div class="progress-step ${stepClass}">
@@ -536,96 +614,75 @@
                     </div>
                 </div>
 
+                <div class="status-strip">
+                    <div class="card-title" style="border: none; padding-bottom: 0; margin-bottom: 6px;">Deal Status</div>
+                    ${renderProgressBar(deal.status)}
+                </div>
+
                 <div class="deal-content">
                     <div class="main-content">
-                        <!-- Customer & Deal Information -->
                         <div class="card">
-                            <div class="card-title">Customer & Deal Information</div>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 20px;">
-                                <div>
-                                    <h4 style="margin-bottom: 15px; color: var(--primary-red);">Applicant</h4>
-                                    <div class="info-grid">
-                                        <div class="info-item">
-                                            <div class="info-label">Name</div>
-                                            <div class="info-value">${deal.primaryApplicant.name || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Address</div>
-                                            <div class="info-value">${deal.primaryApplicant.currentAddress || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Phone</div>
-                                            <div class="info-value">${deal.primaryApplicant.phone || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">SSN</div>
-                                            <div class="info-value">${deal.primaryApplicant.ssn || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Residence</div>
-                                            <div class="info-value">${deal.primaryApplicant.addressYears || '0'} yrs. ${deal.primaryApplicant.addressMonths || '0'} mos.</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Employment</div>
-                                            <div class="info-value">${deal.primaryApplicant.employment?.employmentYears || '0'} yrs. ${deal.primaryApplicant.employment?.employmentMonths || '0'} mos.</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Ann. Income</div>
-                                            <div class="info-value">${formatCurrency(deal.primaryApplicant.employment?.income)}</div>
-                                        </div>
-                                    </div>
+                            <div class="section-banner">Customer & Deal Information</div>
+                            <div class="table-grid">
+                                <div class="table-row table-header">
+                                    <div class="table-cell"></div>
+                                    <div class="table-cell">Applicant</div>
+                                    <div class="table-cell">Co-Applicant</div>
                                 </div>
 
-                                ${deal.coApplicant ? `
-                                <div>
-                                    <h4 style="margin-bottom: 15px; color: var(--primary-red);">Co-Applicant</h4>
-                                    <div class="info-grid">
-                                        <div class="info-item">
-                                            <div class="info-label">Name</div>
-                                            <div class="info-value">${deal.coApplicant.name || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Address</div>
-                                            <div class="info-value">${deal.coApplicant.currentAddress || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">SSN</div>
-                                            <div class="info-value">${deal.coApplicant.ssn || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Employment</div>
-                                            <div class="info-value">${deal.coApplicant.employment?.currentEmployer || 'N/A'}</div>
-                                        </div>
-                                        <div class="info-item">
-                                            <div class="info-label">Ann. Income</div>
-                                            <div class="info-value">${formatCurrency(deal.coApplicant.employment?.income)}</div>
-                                        </div>
-                                    </div>
+                                <div class="table-row">
+                                    <div class="table-cell table-label">Name</div>
+                                    <div class="table-cell">${deal.primaryApplicant.name || 'N/A'}</div>
+                                    <div class="table-cell">${deal.coApplicant?.name || '--'}</div>
                                 </div>
-                                ` : '<div></div>'}
+                                <div class="table-row">
+                                    <div class="table-cell table-label">Address</div>
+                                    <div class="table-cell">${deal.primaryApplicant.currentAddress || 'N/A'}</div>
+                                    <div class="table-cell">${deal.coApplicant?.currentAddress || '--'}</div>
+                                </div>
+                                <div class="table-row">
+                                    <div class="table-cell table-label">(H)</div>
+                                    <div class="table-cell">${deal.primaryApplicant.homePhone || deal.primaryApplicant.phone || '--'}</div>
+                                    <div class="table-cell">${deal.coApplicant?.homePhone || '--'}</div>
+                                </div>
+                                <div class="table-row">
+                                    <div class="table-cell table-label">(M)</div>
+                                    <div class="table-cell">${deal.primaryApplicant.mobilePhone || '--'}</div>
+                                    <div class="table-cell">${deal.coApplicant?.mobilePhone || '--'}</div>
+                                </div>
+                                <div class="table-row">
+                                    <div class="table-cell table-label">SSN</div>
+                                    <div class="table-cell">${deal.primaryApplicant.ssn || 'N/A'}</div>
+                                    <div class="table-cell">${deal.coApplicant?.ssn || '--'}</div>
+                                </div>
+                                <div class="table-row">
+                                    <div class="table-cell table-label">Residence</div>
+                                    <div class="table-cell">${deal.primaryApplicant.addressYears || '0'} yrs. ${deal.primaryApplicant.addressMonths || '0'} mos.</div>
+                                    <div class="table-cell">${deal.coApplicant?.addressYears ? `${deal.coApplicant.addressYears} yrs. ${deal.coApplicant.addressMonths || '0'} mos.` : '--'}</div>
+                                </div>
+                                <div class="table-row">
+                                    <div class="table-cell table-label">Employment</div>
+                                    <div class="table-cell">${deal.primaryApplicant.employment?.employmentYears || '0'} yrs. ${deal.primaryApplicant.employment?.employmentMonths || '0'} mos.</div>
+                                    <div class="table-cell">${deal.coApplicant?.employment ? `${deal.coApplicant.employment.employmentYears || '0'} yrs. ${deal.coApplicant.employment.employmentMonths || '0'} mos.` : '--'}</div>
+                                </div>
+                                <div class="table-row">
+                                    <div class="table-cell table-label">Ann. Income</div>
+                                    <div class="table-cell">${formatCurrency(deal.primaryApplicant.employment?.income)}</div>
+                                    <div class="table-cell">${formatCurrency(deal.coApplicant?.employment?.income) || '--'}</div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Deal Status Progress -->
                         <div class="card">
-                            <div class="card-title">Deal Status</div>
-                            ${renderProgressBar(deal.status)}
-                        </div>
-
-                        <!-- Conversations History -->
-                        <div class="card">
-                            <div class="card-title">
-                                Conversations History
-                                <button class="nav-btn secondary" onclick="refreshConversations()" style="float: right; padding: 4px 8px; font-size: 12px; margin-top: -4px;">
-                                    <i class="fas fa-refresh"></i> Refresh
+                            <div class="section-banner">Conversations History</div>
+                            <div style="padding: 0 0 10px 0; text-align: right;">
+                                <button class="nav-btn secondary" onclick="refreshConversations()" style="padding: 4px 8px; font-size: 12px;">
+                                    Refresh
                                 </button>
                             </div>
                             <div class="conversations-timeline" id="conversationsTimeline">
                                 ${renderConversationsTimeline(deal.conversations || [])}
                             </div>
-                            
-                            <!-- Add Note Form -->
                             <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px;">
                                 <h4 style="margin-bottom: 10px; font-size: 14px; color: var(--primary-red);">Add Note</h4>
                                 <textarea 
@@ -634,16 +691,15 @@
                                     style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; min-height: 80px; font-size: 13px;"
                                 ></textarea>
                                 <button onclick="addDealerNote()" style="margin-top: 10px; background: var(--primary-red); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;">
-                                    <i class="fas fa-plus"></i> Add Note
+                                    Add Note
                                 </button>
                             </div>
                         </div>
                     </div>
 
                     <div class="sidebar-content">
-                        <!-- Deal Information -->
                         <div class="card">
-                            <div class="card-title">Deal Information</div>
+                            <div class="section-banner">Deal Information</div>
                             <div class="info-item">
                                 <div class="info-label">Vehicle</div>
                                 <div class="info-value">${deal.vehicle.year || ''} ${deal.vehicle.makeModel || 'N/A'}</div>
@@ -712,9 +768,8 @@
                             </div>
                         </div>
 
-                        <!-- Additional Deal Details -->
                         <div class="card">
-                            <div class="card-title">Additional Details</div>
+                            <div class="section-banner">Additional Details</div>
                             <div class="info-grid">
                                 <div class="info-item">
                                     <div class="info-label">Dealer</div>

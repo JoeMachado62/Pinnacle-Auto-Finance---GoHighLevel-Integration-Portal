@@ -283,6 +283,155 @@ router.put('/dealers/:dealerId/subscription',
     }
 );
 
+// ===== GET APPLICATION DETAILS (ADMIN) =====
+router.get('/applications/:applicationId',
+    authenticateAdmin,
+    requirePermission('view_all_applications'),
+    async (req, res) => {
+        // Prevent caching of admin endpoints to avoid permission issues
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
+        try {
+            const { applicationId } = req.params;
+            console.log('Admin application detail request:', {
+                applicationId,
+                userId: req.user?.id,
+                userEmail: req.user?.email,
+                userRole: req.user?.role,
+                subscriptionTier: req.user?.subscriptionTier
+            });
+
+            const application = await db.getApplicationById(applicationId);
+            if (!application) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Application not found'
+                });
+            }
+
+            // Get dealer information
+            const dealer = await db.getDealerById(application.dealerId);
+            if (!dealer) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Associated dealer not found'
+                });
+            }
+
+            // Get conversation history
+            const conversations = await db.getConversationsByApplicationId(applicationId);
+
+            // Format for deal jacket display - transform flat data to nested structure
+            const dealJacket = {
+                // Transform flat application data to nested structure expected by frontend
+                id: application.id,
+                status: application.status,
+                dateAdded: application.createdAt,
+                monetaryValue: application.amountFinanced,
+                primaryApplicant: {
+                    name: application.applicantName || 'N/A',
+                    email: application.applicantData?.borrower1_email || application.applicantEmail || 'N/A',
+                    phone: application.applicantData?.borrower1_phone || 'N/A',
+                    ssn: application.applicantData?.borrower1_ssn || 'N/A',
+                    currentAddress: application.applicantData?.borrower1_currentAddress || 'N/A',
+                    addressYears: application.applicantData?.borrower1_addressYears || '0',
+                    addressMonths: application.applicantData?.borrower1_addressMonths || '0',
+                    employment: {
+                        currentEmployer: application.applicantData?.borrower1_employer || 'N/A',
+                        income: application.applicantData?.borrower1_income || 0,
+                        employmentYears: application.applicantData?.borrower1_employmentYears || '0',
+                        employmentMonths: application.applicantData?.borrower1_employmentMonths || '0'
+                    }
+                },
+                coApplicant: application.applicantData?.borrower2_firstName ? {
+                    name: `${application.applicantData.borrower2_firstName} ${application.applicantData.borrower2_lastName}`,
+                    email: application.applicantData.borrower2_email || 'N/A',
+                    phone: application.applicantData.borrower2_phone || 'N/A',
+                    ssn: application.applicantData.borrower2_ssn || 'N/A',
+                    currentAddress: application.applicantData.borrower2_currentAddress || 'N/A',
+                    employment: {
+                        currentEmployer: application.applicantData.borrower2_employer || 'N/A',
+                        income: application.applicantData.borrower2_income || 0
+                    }
+                } : null,
+                vehicle: {
+                    year: application.applicantData?.vehicle_year || '',
+                    makeModel: application.applicantData?.vehicle_make_model || application.vehicleInfo || 'N/A',
+                    vin: application.applicantData?.vehicle_vin || 'N/A',
+                    mileage: application.applicantData?.vehicle_mileage || 'N/A'
+                },
+                financial: {
+                    sellingPrice: application.applicantData?.vehicle_sellingPrice || application.amountFinanced || 0,
+                    amountFinanced: application.amountFinanced || 0,
+                    cashDown: application.applicantData?.downPayment || application.downPayment || 0,
+                    taxes: application.applicantData?.taxes || 0,
+                    titleFees: application.applicantData?.titleFees || 0
+                },
+                dealer: {
+                    name: dealer.dealerName,
+                    contact: dealer.contactName,
+                    telephone: dealer.phone
+                },
+                workflow: {
+                    lastUpdated: application.updatedAt || application.createdAt
+                },
+                application: {
+                    id: application.id,
+                    applicantName: application.applicantName,
+                    applicantEmail: application.applicantEmail,
+                    vehicleInfo: application.vehicleInfo,
+                    amountFinanced: application.amountFinanced,
+                    downPayment: application.downPayment,
+                    status: application.status,
+                    dtStatus: application.dtStatus,
+                    dtReference: application.dtReferenceNumber,
+                    createdAt: application.createdAt,
+                    updatedAt: application.updatedAt
+                },
+                conversations: conversations.map(conv => ({
+                    id: conv.id,
+                    type: conv.noteType,
+                    content: conv.content,
+                    createdBy: conv.createdByName,
+                    timestamp: conv.timestamp,
+                    isSystem: conv.createdBy === 'system',
+                    importance: conv.importanceLevel
+                })),
+                dealer: {
+                    name: dealer.dealerName,
+                    tier: dealer.subscriptionTier
+                },
+                features: {
+                    canAddNotes: true,
+                    ghlIntegration: dealer.subscriptionTier === 'premium' && !!application.ghlMarketingContactId,
+                    dtIntegration: true,
+                    adminAccess: true // Flag to indicate admin access
+                }
+            };
+
+            logBusiness('Admin viewed application details', {
+                adminId: req.user.id,
+                applicationId,
+                dealerId: application.dealerId
+            });
+
+            res.json({
+                success: true,
+                dealJacket: dealJacket
+            });
+
+        } catch (error) {
+            logger.error('Admin application details error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch application details'
+            });
+        }
+    }
+);
+
 // ===== UPDATE APPLICATION STATUS =====
 router.put('/applications/:applicationId/status',
     authenticateAdmin,
@@ -292,10 +441,20 @@ router.put('/applications/:applicationId/status',
             const { applicationId } = req.params;
             const { status, notes } = req.body;
 
-            if (!['submitted', 'approved', 'rejected', 'processing'].includes(status)) {
+            const validStatuses = [
+                'New Deal Submitted', 
+                'Conditional Approval', 
+                'Final Approval', 
+                'Pending Docs', 
+                'Original Docs', 
+                'Deal Funded', 
+                'Declined'
+            ];
+            
+            if (!validStatuses.includes(status)) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Invalid status'
+                    message: 'Invalid status. Valid options: ' + validStatuses.join(', ')
                 });
             }
 

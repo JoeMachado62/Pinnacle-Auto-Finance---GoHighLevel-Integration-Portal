@@ -601,14 +601,17 @@
         "term": "84",
         "apr": "9.75"
       },
-      "status": "submitted",
+      "status": "processing",
       "dtStatus": "pending",
       "submittedFrom": "127.0.0.1",
       "ghlMarketingContactId": null,
       "ghlOpportunityId": null,
       "id": "f665f3c4-0b79-48ad-9601-27b9bda7b935",
-      "createdAt": "2025-08-04T05:20:08.849Z"
+      "createdAt": "2025-08-04T05:20:08.849Z",
+      "updatedAt": "2025-08-09T01:07:47.712Z",
+      "lastUpdatedBy": "admin-002",
+      "adminNotes": "Status updated from submitted to processing by administrator"
     }
   ],
-  "lastUpdated": "2025-08-04T05:20:08.849Z"
+  "lastUpdated": "2025-08-09T01:07:47.712Z"
 }

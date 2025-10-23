@@ -104,7 +104,37 @@
       "ghlSynced": false,
       "id": "45e0cfe8-2848-40ba-b9bb-db4db6cd0ffb",
       "timestamp": "2025-08-05T13:35:01.479Z"
+    },
+    {
+      "applicationId": "f665f3c4-0b79-48ad-9601-27b9bda7b935",
+      "noteType": "system_note",
+      "content": "Application status updated from \"submitted\" to \"processing\" by administrator. Note: Status updated from submitted to processing by administrator",
+      "createdBy": "admin-002",
+      "createdByName": "Admin: Joe Machado (Admin)",
+      "createdByType": "admin",
+      "attachments": [],
+      "isInternal": false,
+      "importanceLevel": "high",
+      "notificationSent": false,
+      "ghlSynced": false,
+      "id": "9488f8a3-8c95-41c2-906b-3cb4d4e01ad7",
+      "timestamp": "2025-08-09T01:07:47.714Z"
+    },
+    {
+      "applicationId": "f665f3c4-0b79-48ad-9601-27b9bda7b935",
+      "noteType": "admin_note",
+      "content": "Application status updated to processing",
+      "createdBy": "admin-002",
+      "createdByName": "Admin: Joe Machado (Admin)",
+      "createdByType": "admin",
+      "attachments": [],
+      "isInternal": false,
+      "importanceLevel": "high",
+      "notificationSent": false,
+      "ghlSynced": false,
+      "id": "21aab604-3eae-41f1-8dbf-f3066229339a",
+      "timestamp": "2025-08-09T01:07:48.811Z"
     }
   ],
-  "lastUpdated": "2025-08-05T13:35:01.479Z"
+  "lastUpdated": "2025-08-09T01:07:48.811Z"
 }

@@ -38,14 +38,14 @@
       "status": "active",
       "role": "admin",
       "createdAt": "2025-07-27T23:25:00.000Z",
-      "lastLogin": "2025-08-01T20:03:29.250Z",
-      "failedLoginAttempts": 0,
+      "lastLogin": "2025-08-09T01:02:06.257Z",
+      "failedLoginAttempts": 2,
       "accountLockedUntil": null,
       "emailVerified": true,
       "ghlUserId": null,
       "ghlContactId": null,
       "ghlIntegrationEnabled": false,
-      "updatedAt": "2025-08-01T19:48:12.692Z",
+      "updatedAt": "2025-10-23T19:15:51.905Z",
       "profilePictureUrl": "uploads/profile-pictures/admin-002-1753709215548.png"
     },
     {
@@ -61,14 +61,14 @@
       "subscriptionTier": "premium",
       "status": "active",
       "createdAt": "2025-06-30T12:03:39.121Z",
-      "lastLogin": "2025-08-06T17:01:09.047Z",
-      "failedLoginAttempts": 0,
+      "lastLogin": "2025-08-09T00:01:54.202Z",
+      "failedLoginAttempts": 1,
       "accountLockedUntil": null,
       "emailVerified": false,
       "ghlUserId": null,
       "ghlContactId": null,
       "ghlIntegrationEnabled": true,
-      "updatedAt": "2025-08-06T16:08:10.775Z",
+      "updatedAt": "2025-10-23T19:15:56.019Z",
       "profilePictureUrl": "uploads/profile-pictures/ee56c306-cc40-4dd9-8e86-ef11b313455a-1752633598296.jpg",
       "upgradedAt": "2025-08-06T16:08:10.770Z"
     },
@@ -85,7 +85,7 @@
       "subscriptionTier": "premium",
       "status": "active",
       "createdAt": "2025-08-05T13:31:25.940Z",
-      "lastLogin": "2025-08-05T23:40:03.804Z",
+      "lastLogin": "2025-08-09T00:37:48.157Z",
       "failedLoginAttempts": 0,
       "accountLockedUntil": null,
       "emailVerified": false,
@@ -119,5 +119,5 @@
       "updatedAt": "2025-08-05T19:44:18.747Z"
     }
   ],
-  "lastUpdated": "2025-08-06T17:46:19.853Z"
+  "lastUpdated": "2025-10-23T19:15:56.019Z"
 }

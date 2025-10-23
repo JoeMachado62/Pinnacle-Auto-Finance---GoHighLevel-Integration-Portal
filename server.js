@@ -51,6 +51,12 @@ const adminRoutes = require('./routes/adminRoutes');
 console.log('✅ Admin routes loaded');
 const premiumRoutes = require('./routes/premiumRoutes');
 console.log('✅ Premium routes loaded');
+const agentRoutes = require('./routes/agentRoutes');
+console.log('✅ Agent routes loaded');
+const clientRoutes = require('./routes/clientRoutes');
+console.log('✅ Client routes loaded');
+const lenderRoutes = require('./routes/lenderRoutes');
+console.log('✅ Lender routes loaded');
 
 // Initialize Express app
 console.log('🏗️ Initializing Express app...');
@@ -303,6 +309,18 @@ logDebug('ROUTES', '✅ Admin routes mounted');
 logDebug('ROUTES', 'Mounting /api/premium routes...');
 app.use('/api/premium', premiumRoutes);
 logDebug('ROUTES', '✅ Premium routes mounted');
+
+logDebug('ROUTES', 'Mounting /api/agent routes...');
+app.use('/api/agent', agentRoutes);
+logDebug('ROUTES', '✅ Agent routes mounted');
+
+logDebug('ROUTES', 'Mounting /api/client routes...');
+app.use('/api/client', clientRoutes);
+logDebug('ROUTES', '✅ Client routes mounted');
+
+logDebug('ROUTES', 'Mounting /api/lenders routes...');
+app.use('/api/lenders', lenderRoutes);
+logDebug('ROUTES', '✅ Lender routes mounted');
 
 // Also mount legacy route for backward compatibility
 logDebug('ROUTES', 'Mounting legacy /api/credit-application routes...');

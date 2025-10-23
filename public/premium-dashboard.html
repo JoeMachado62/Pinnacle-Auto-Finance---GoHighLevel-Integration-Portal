@@ -34,7 +34,7 @@
         .ghl-iframe-container {
             position: relative;
             width: 100%;
-            height: 800px;
+            height: 1000px;
             border: 2px solid #e1e5e9;
             border-radius: 12px;
             background: #f8f9fa;
@@ -201,7 +201,7 @@
         </div>
         
         <button class="launch-ghl-btn" onclick="loadGHLInterface()">
-            🚀 Open GoHighLevel Marketing Suite
+            Launch GoHighLevel Marketing Suite
         </button>
         
         <div class="ghl-iframe-container" id="ghlContainer" style="display: none;">
@@ -225,9 +225,17 @@
         
         async function loadGHLInterface() {
             try {
-                document.getElementById('loadingOverlay').style.display = 'flex';
+                const container = document.getElementById('ghlContainer');
+                const iframe = document.getElementById('ghlIframe');
+                const loadingOverlay = document.getElementById('loadingOverlay');
                 
-                // Get GHL interface URL and check registration status
+                // Show the container
+                container.style.display = 'block';
+                
+                // Scroll to the container
+                container.scrollIntoView({ behavior: 'smooth' });
+                
+                // Get GHL interface URL from backend
                 const response = await fetch('/api/premium/ghl-interface', {
                     method: 'GET',
                     headers: {
@@ -236,218 +244,27 @@
                     }
                 });
                 
-                const data = await response.json();
-                console.log('GHL interface data:', data);
-                
-                if (response.ok && data.success) {
-                    // Auto-login successful - open GHL with access token
-                    let ghlUrl = data.ghlUrl;
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('GHL interface data:', data);
                     
-                    // If we have an access token, we could potentially auto-authenticate
-                    // For now, we'll just open the GHL login page
-                    const popup = window.open(
-                        ghlUrl,
-                        'ghl-interface',
-                        'width=1400,height=900,scrollbars=yes,resizable=yes,location=yes,menubar=no,toolbar=no'
-                    );
+                    // For now, load GHL directly (will add auto-login in Sprint 3)
+                    iframe.src = data.ghlUrl;
                     
-                    if (popup) {
-                        popup.focus();
-                        
-                        // Show success message with auto-login info
-                        const container = document.getElementById('ghlContainer');
-                        const isExistingUser = data.existingUser;
-                        const message = data.message || 'GHL interface ready';
-                        
-                        container.innerHTML = `
-                            <div style="text-align: center; padding: 40px; background: #f8f9fa; border-radius: 12px; border: 2px solid #28a745;">
-                                <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
-                                <h3 style="color: #28a745; margin-bottom: 15px;">GoHighLevel Access Ready!</h3>
-                                <p style="color: #666; margin-bottom: 15px;">
-                                    ${isExistingUser ? 
-                                        'Your existing GHL account is ready. The login window has opened.' : 
-                                        'Your GHL account is active. The login window has opened - you should be automatically logged in.'
-                                    }
-                                </p>
-                                <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #28a745;">
-                                    <p style="margin: 0; color: #155724; font-weight: 500;">
-                                        ${isExistingUser ? 
-                                            '🔑 <strong>Existing User:</strong> Use your regular GHL login credentials (joemachado62@live.com)' :
-                                            '✨ <strong>Auto-Login Enabled:</strong> Your credentials have been pre-configured for seamless access.'
-                                        }
-                                    </p>
-                                </div>
-                                ${isExistingUser ? `
-                                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
-                                        <p style="margin: 0; color: #856404; font-weight: 500;">
-                                            💡 <strong>Quick Access:</strong> Since you already have a GHL account, simply login with your existing credentials and access all your dealer tools!
-                                        </p>
-                                    </div>
-                                ` : ''}
-                                <button onclick="window.open('${ghlUrl}', 'ghl-interface', 'width=1400,height=900,scrollbars=yes,resizable=yes')" 
-                                        style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-right: 10px;">
-                                    ${isExistingUser ? 'Open GoHighLevel Login' : 'Reopen GoHighLevel'}
-                                </button>
-                                <button onclick="location.reload()" 
-                                        style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                                    Refresh Page
-                                </button>
-                            </div>
-                        `;
-                        container.style.display = 'block';
-                    } else {
-                        throw new Error('Popup blocked - please allow popups for this site to access GoHighLevel');
-                    }
-                    
-                } else if (data.registrationStatus === 'not_registered') {
-                    // User needs to register for GHL
-                    showRegistrationPrompt();
-                    
-                } else if (data.registrationStatus === 'pending_approval') {
-                    // Registration is pending admin approval
-                    showPendingApprovalMessage();
+                    // Hide loading overlay after iframe loads
+                    iframe.onload = function() {
+                        setTimeout(() => {
+                            loadingOverlay.style.display = 'none';
+                        }, 2000);
+                    };
                     
                 } else {
-                    throw new Error(data.message || 'Failed to load GHL interface');
+                    throw new Error('Failed to load GHL interface');
                 }
                 
             } catch (error) {
                 console.error('Error loading GHL interface:', error);
-                showErrorMessage(error.message);
-            } finally {
-                document.getElementById('loadingOverlay').style.display = 'none';
-            }
-        }
-        
-        function showRegistrationPrompt() {
-            const container = document.getElementById('ghlContainer');
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px; background: #fff3cd; border-radius: 12px; border: 2px solid #ffc107;">
-                    <div style="font-size: 48px; margin-bottom: 20px;">🚀</div>
-                    <h3 style="color: #856404; margin-bottom: 15px;">GoHighLevel Registration Required</h3>
-                    <p style="color: #664d03; margin-bottom: 20px;">
-                        To access your premium GoHighLevel CRM and marketing tools, you need to complete a one-time registration.
-                        This will create your personal GHL user account with restricted access to your dealer data.
-                    </p>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
-                        <h4 style="color: #667eea; margin-top: 0;">What happens next:</h4>
-                        <ul style="color: #666; margin-bottom: 0; padding-left: 20px;">
-                            <li>We'll create your GHL contact and submit registration</li>
-                            <li>Admin will review and approve your access</li>
-                            <li>You'll receive login credentials via email</li>
-                            <li>Future access will be automatic with one-click login</li>
-                        </ul>
-                    </div>
-                    <button onclick="registerForGHL()" 
-                            style="background: #ffc107; color: #212529; border: none; padding: 15px 30px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin-right: 10px;">
-                        📝 Register for GoHighLevel Access
-                    </button>
-                    <button onclick="location.reload()" 
-                            style="background: #6c757d; color: white; border: none; padding: 15px 30px; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                        Cancel
-                    </button>
-                </div>
-            `;
-            container.style.display = 'block';
-        }
-        
-        function showPendingApprovalMessage() {
-            const container = document.getElementById('ghlContainer');
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px; background: #d1ecf1; border-radius: 12px; border: 2px solid #17a2b8;">
-                    <div style="font-size: 48px; margin-bottom: 20px;">⏳</div>
-                    <h3 style="color: #0c5460; margin-bottom: 15px;">Registration Pending Approval</h3>
-                    <p style="color: #0c5460; margin-bottom: 20px;">
-                        Your GoHighLevel registration has been submitted and is awaiting admin approval.
-                        You'll receive an email with your login credentials once approved.
-                    </p>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <p style="margin: 0; color: #495057;">
-                            📧 <strong>Check your email</strong> for approval notifications<br>
-                            ⏱️ <strong>Typical approval time:</strong> 1-2 business days
-                        </p>
-                    </div>
-                    <button onclick="checkRegistrationStatus()" 
-                            style="background: #17a2b8; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-right: 10px;">
-                        🔄 Check Status
-                    </button>
-                    <button onclick="location.reload()" 
-                            style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                        Refresh Page
-                    </button>
-                </div>
-            `;
-            container.style.display = 'block';
-        }
-        
-        function showErrorMessage(errorMessage) {
-            const container = document.getElementById('ghlContainer');
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px; background: #f8d7da; border-radius: 12px; border: 2px solid #dc3545;">
-                    <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
-                    <h3 style="color: #721c24; margin-bottom: 15px;">Error Loading GoHighLevel</h3>
-                    <p style="color: #721c24; margin-bottom: 20px;">
-                        ${errorMessage}
-                    </p>
-                    <button onclick="location.reload()" 
-                            style="background: #dc3545; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                        Try Again
-                    </button>
-                </div>
-            `;
-            container.style.display = 'block';
-        }
-        
-        async function registerForGHL() {
-            try {
-                document.getElementById('loadingOverlay').style.display = 'flex';
-                
-                const response = await fetch('/api/premium/register-ghl', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('pinnacle_auth_token')}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    showPendingApprovalMessage();
-                } else {
-                    throw new Error(data.message || 'Registration failed');
-                }
-                
-            } catch (error) {
-                console.error('Error registering for GHL:', error);
-                showErrorMessage('Registration failed: ' + error.message);
-            } finally {
-                document.getElementById('loadingOverlay').style.display = 'none';
-            }
-        }
-        
-        async function checkRegistrationStatus() {
-            try {
-                const response = await fetch('/api/premium/ghl-status', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('pinnacle_auth_token')}`
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    if (data.registrationStatus.status === 'active') {
-                        location.reload(); // Reload to access GHL
-                    } else {
-                        alert(`Registration Status: ${data.registrationStatus.status}`);
-                    }
-                } else {
-                    alert('Failed to check status');
-                }
-            } catch (error) {
-                console.error('Error checking registration status:', error);
-                alert('Error checking registration status');
+                alert('Error loading GoHighLevel interface. Please try again.');
             }
         }
         
@@ -494,34 +311,12 @@
                 
                 if (!response.ok) {
                     console.log('Premium access denied, status:', response.status);
-                    
-                    // Get error details for debugging
-                    let errorData;
-                    try {
-                        errorData = await response.json();
-                        console.log('Premium access error:', errorData);
-                    } catch (e) {
-                        console.log('Could not parse error response');
-                    }
-                    
-                    if (response.status === 401) {
+                    if (response.status === 401 || response.status === 403) {
                         // Authentication failed, redirect to login
-                        console.log('Authentication failed - redirecting to login');
                         localStorage.removeItem('pinnacle_auth_token');
                         window.location.href = '/login.html';
-                    } else if (response.status === 403) {
-                        // Forbidden - might be GHL integration issue
-                        console.log('Access forbidden - checking error type');
-                        if (errorData && errorData.error === 'GHL_INTEGRATION_REQUIRED') {
-                            console.log('GHL integration required but user is premium - this should not happen');
-                            alert('Premium access issue detected. Please contact support. Error: GHL_INTEGRATION_REQUIRED');
-                        } else {
-                            console.log('Premium access denied - redirecting to main dashboard');
-                            window.location.href = '/dashboard.html';
-                        }
                     } else {
                         // Other error, redirect to main dashboard
-                        console.log('Other error - redirecting to main dashboard');
                         window.location.href = '/dashboard.html';
                     }
                     return;
