@@ -70,11 +70,16 @@ const configValues = {
     GHL_PRIVATE_TOKEN: process.env.GHL_PRIVATE_TOKEN, // V2 API fallback
 
     // Claude API for Autofill Agent
+    // AI & Automation Configuration
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-
-    // BrowserBase API for browser automation
     BROWSERBASE_API_KEY: process.env.BROWSERBASE_API_KEY,
     BROWSERBASE_PROJECT_ID: process.env.BROWSERBASE_PROJECT_ID,
+    STAGEHAND_ENABLED: process.env.STAGEHAND_ENABLED === 'true',
+    STAGEHAND_SERVICE_URL: process.env.STAGEHAND_SERVICE_URL || 'http://localhost:8000',
+    STAGEHAND_TIMEOUT: parseInt(process.env.STAGEHAND_TIMEOUT) || 120000,
+    AUTOFILL_PARALLEL_SUBMISSIONS: process.env.AUTOFILL_PARALLEL_SUBMISSIONS === 'true',
+    AUTOFILL_MAX_CONCURRENT_LENDERS: parseInt(process.env.AUTOFILL_MAX_CONCURRENT_LENDERS) || 5,
+    AUTOFILL_SUBMISSION_TIMEOUT: parseInt(process.env.AUTOFILL_SUBMISSION_TIMEOUT) || 180000,
     
     // DealerTrack configuration
     DEALERTRACK_QUEUE_POLL_INTERVAL: parseInt(process.env.DEALERTRACK_QUEUE_POLL_INTERVAL) || 30000, // 30 seconds

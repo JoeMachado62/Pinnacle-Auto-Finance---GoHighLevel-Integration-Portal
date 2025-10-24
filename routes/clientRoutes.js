@@ -9,6 +9,7 @@ const config = require('../config');
 const db = require('../services/databaseService');
 const logger = require('../utils/logger');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
+const stagehandService = require('../services/stagehandService');
 
 // ===== AUTHENTICATION ENDPOINTS =====
 
@@ -388,36 +389,63 @@ router.post('/submit-to-lenders', authenticateToken, async (req, res) => {
             });
         }
 
-        // TODO: Trigger Python automation service (Phase 2)
-        // For now, just create submission records
+        // Trigger Stagehand automation service
+        try {
+            const result = await stagehandService.submitToMultipleLenders(
+                applicationId,
+                lenderIds
+            );
 
-        const submissions = [];
-        for (const lenderId of lenderIds) {
-            const lender = await db.getLenderById(lenderId);
-            if (lender && lender.active) {
-                const submission = await db.createSubmission({
-                    dealerId: application.dealerId,
-                    applicationId: application.id,
-                    lenderUrl: lender.url,
-                    lenderName: lender.name,
-                    status: 'pending',
-                    applicationData: application.applicantData || application
-                });
-                submissions.push(submission);
+            logger.info('Lender submissions completed', {
+                clientId: req.user.id,
+                applicationId,
+                total: result.total,
+                successful: result.successful,
+                errors: result.errors
+            });
+
+            res.json({
+                success: true,
+                message: `Submitted to ${result.successful} of ${result.total} lenders`,
+                total: result.total,
+                successful: result.successful,
+                errors: result.errors,
+                results: result.results
+            });
+
+        } catch (automationError) {
+            logger.error('Stagehand automation failed', {
+                clientId: req.user.id,
+                applicationId,
+                error: automationError.message
+            });
+
+            // Fall back to creating pending submissions
+            const submissions = [];
+            for (const lenderId of lenderIds) {
+                const lender = await db.getLenderById(lenderId);
+                if (lender && lender.active) {
+                    const submission = await db.createSubmission({
+                        dealerId: application.dealerId,
+                        applicationId: application.id,
+                        lenderId: lender.id,
+                        lenderUrl: lender.url,
+                        lenderName: lender.name,
+                        status: 'error',
+                        errorMessage: automationError.message,
+                        applicationData: application.applicantData || application
+                    });
+                    submissions.push(submission);
+                }
             }
+
+            res.json({
+                success: false,
+                message: 'Automation failed, submissions created for manual processing',
+                error: automationError.message,
+                submissions
+            });
         }
-
-        logger.info('Lender submissions queued', {
-            clientId: req.user.id,
-            applicationId,
-            submissionCount: submissions.length
-        });
-
-        res.json({
-            success: true,
-            message: `Queued ${submissions.length} submissions`,
-            submissions
-        });
 
     } catch (error) {
         logger.error('Submit to lenders error', { error: error.message });
